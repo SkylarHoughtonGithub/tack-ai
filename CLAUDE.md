@@ -35,10 +35,6 @@ All commands use `uv run` — no need to activate the venv manually.
 - `AuditRecord` — one event in the audit trail; holds actor, tool, policy decision, cost, and hash fields (hash fields added in Phase 4)
 - `PolicyDecision` — enum: `allow` / `deny` / `require_approval`
 
-## Python version note
-
-The project runs on Python 3.9 (system interpreter). Use `Optional[X]` from `typing` rather than `X | None` union syntax, which requires 3.10+.
-
 ## Phase status
 
 Currently on **Phase 0 — Foundations** (environment setup complete). Next: Phase 1 (single agent with read-only tools and structured output).

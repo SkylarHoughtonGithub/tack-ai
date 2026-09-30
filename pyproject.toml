@@ -5,8 +5,9 @@ description = "Add your description here"
 authors = [
     { name = "SkylarHoughtonGithub", email = "skylarhoughtongithub@gmail.com" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=0.130.0",
     "pydantic-ai>=0.8.1",
     "pydantic-settings>=2.11.0",
 ]
