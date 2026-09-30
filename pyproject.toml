@@ -1,0 +1,19 @@
+[project]
+name = "tack-ai"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "SkylarHoughtonGithub", email = "skylarhoughtongithub@gmail.com" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "pydantic-ai>=0.8.1",
+    "pydantic-settings>=2.11.0",
+]
+
+[project.scripts]
+tack-ai = "tack_ai:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"

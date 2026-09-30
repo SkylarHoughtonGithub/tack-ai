@@ -1,0 +1,41 @@
+from datetime import datetime
+from enum import Enum
+from typing import Any, Optional
+from pydantic import BaseModel, Field
+
+
+class TaskPriority(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class Task(BaseModel):
+    id: str
+    description: str
+    priority: TaskPriority = TaskPriority.medium
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ToolCall(BaseModel):
+    tool_name: str
+    arguments: dict[str, Any]
+    run_id: str
+    called_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PolicyDecision(str, Enum):
+    allow = "allow"
+    deny = "deny"
+    require_approval = "require_approval"
+
+
+class AuditRecord(BaseModel):
+    run_id: str
+    actor: str
+    event_type: str
+    tool_name: Optional[str] = None
+    policy_decision: Optional[PolicyDecision] = None
+    outcome: Optional[str] = None
+    cost_usd: Optional[float] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
