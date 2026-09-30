@@ -1,0 +1,9 @@
+[tiers]
+simple        = "openai:gpt-4o-mini"
+general       = "anthropic:claude-sonnet-4-6"
+deep_reasoning = "anthropic:claude-sonnet-4-6"
+
+[fallbacks]
+simple         = ["anthropic:claude-haiku-4-5-20251001"]
+general        = ["openai:gpt-4o"]
+deep_reasoning = ["openai:gpt-4o"]
