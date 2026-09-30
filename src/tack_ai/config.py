@@ -12,12 +12,13 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    router_type: str = "llm"  # "llm" (default) or "rule_based" (fallback, no OpenAI key needed)
+    task_budget_usd: float = 0.10
 
     def available_providers(self) -> list[str]:
         return [
-            provider
-            for attr, env_var, url in _PROVIDER_KEY_INFO
-            for provider in [attr.replace("_api_key", "")]
+            attr.replace("_api_key", "")
+            for attr, _, _ in _PROVIDER_KEY_INFO
             if getattr(self, attr)
         ]
 
@@ -53,5 +54,4 @@ class Settings(BaseSettings):
 
     def get_key(self, provider: str) -> str:
         """Return the API key for a provider (call check_providers first)."""
-        attr = f"{provider}_api_key"
-        return getattr(self, attr)  # type: ignore[return-value]
+        return getattr(self, f"{provider}_api_key")  # type: ignore[return-value]
