@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from pydantic import BaseModel, Field
 
 
@@ -34,8 +34,8 @@ class AuditRecord(BaseModel):
     run_id: str
     actor: str
     event_type: str
-    tool_name: Optional[str] = None
-    policy_decision: Optional[PolicyDecision] = None
-    outcome: Optional[str] = None
-    cost_usd: Optional[float] = None
+    tool_name: str | None = None
+    policy_decision: PolicyDecision | None = None
+    outcome: str | None = None
+    cost_usd: float | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)

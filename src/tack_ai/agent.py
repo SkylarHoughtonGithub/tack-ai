@@ -1,8 +1,9 @@
 import asyncio
 from pathlib import Path
-from typing import Optional
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.providers.anthropic import AnthropicProvider
 
 from tack_ai.config import Settings
 
@@ -18,8 +19,13 @@ class ResearchAnswer(BaseModel):
 settings = Settings()
 settings.check_providers(required=["anthropic"])
 
+_model = AnthropicModel(
+    "claude-sonnet-4-6",
+    provider=AnthropicProvider(api_key=settings.get_key("anthropic")),
+)
+
 agent: Agent[None, ResearchAnswer] = Agent(
-    "anthropic:claude-sonnet-4-6",
+    _model,
     output_type=ResearchAnswer,
     system_prompt=(
         "You are a research assistant. Use your tools to answer questions. "
@@ -66,13 +72,19 @@ async def run(question: str) -> None:
     print(f"Sources:    {result.output.sources}")
     print(f"Confidence: {result.output.confidence}")
 
-    usage = result.usage()
+    usage = result.usage
     print("\n=== Usage ===")
-    print(f"Request tokens:  {usage.request_tokens}")
-    print(f"Response tokens: {usage.response_tokens}")
-    # claude-sonnet-4-6: $3/M input, $15/M output
-    cost = (usage.request_tokens * 3 + usage.response_tokens * 15) / 1_000_000
-    print(f"Estimated cost:  ${cost:.5f}")
+    print(f"Input tokens:   {usage.input_tokens}")
+    print(f"Output tokens:  {usage.output_tokens}")
+    print(f"Cache read:     {usage.cache_read_tokens}")
+    print(f"Total tokens:   {usage.total_tokens}")
+    # claude-sonnet-4-6: $3/M input, $15/M output, $0.30/M cache read
+    cost = (
+        (usage.input_tokens or 0) * 3
+        + (usage.output_tokens or 0) * 15
+        + (usage.cache_read_tokens or 0) * 0.30
+    ) / 1_000_000
+    print(f"Estimated cost: ${cost:.5f}")
 
 
 if __name__ == "__main__":

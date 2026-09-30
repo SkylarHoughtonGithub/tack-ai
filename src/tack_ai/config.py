@@ -1,4 +1,3 @@
-from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,8 +10,8 @@ _PROVIDER_KEY_INFO = [
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    anthropic_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
+    anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
 
     def available_providers(self) -> list[str]:
         return [
