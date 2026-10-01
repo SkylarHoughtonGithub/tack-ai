@@ -39,4 +39,4 @@ All Python commands use `uv run` — no need to activate the venv manually.
 
 ## Phase status
 
-**Phases 0, 1, 2, 3 complete.** Next: Phase 4 — audit trail and observability.
+**Phases 0–4 complete.** Next: Phase 5 — evals and policy tests.

@@ -8,10 +8,11 @@ _PROVIDER_KEY_INFO = [
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    logfire_token: str | None = None
     router_type: str = "llm"  # "llm" (default) or "rule_based" (fallback, no OpenAI key needed)
     task_budget_usd: float = 0.10
 
