@@ -9,12 +9,14 @@ A personal AI agent harness built as a structured learning project. The goal is 
 ## Commands
 
 ```bash
-uv run python -c "import pydantic_ai"          # verify install
-uv run python src/tack_ai/async_demo.py        # run async demo
-uv run python -c "from src.tack_ai.models import Task"  # smoke-test models
+# Start OPA policy server (required before running the agent)
+opa run --server --addr :8181 policies/
+
+# Run the agent (in a separate terminal)
+uv run python -m tack_ai.agent
 ```
 
-All commands use `uv run` — no need to activate the venv manually.
+All Python commands use `uv run` — no need to activate the venv manually.
 
 ## Architecture decisions
 
@@ -37,4 +39,4 @@ All commands use `uv run` — no need to activate the venv manually.
 
 ## Phase status
 
-Currently on **Phase 0 — Foundations** (environment setup complete). Next: Phase 1 (single agent with read-only tools and structured output).
+**Phases 0, 1, 2, 3 complete.** Next: Phase 4 — audit trail and observability.
