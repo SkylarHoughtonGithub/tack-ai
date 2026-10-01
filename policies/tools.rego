@@ -2,6 +2,8 @@ package tack.policy
 
 import rego.v1
 
+policy_version := "1.0.0"
+
 # Fail-closed: anything without an explicit allow/require_approval rule is denied.
 default decision := "deny"
 

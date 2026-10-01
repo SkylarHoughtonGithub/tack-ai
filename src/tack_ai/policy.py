@@ -1,9 +1,29 @@
 import asyncio
+from datetime import datetime, timezone
+
 import httpx
-from tack_ai.models import PolicyDecision
+
+from tack_ai.models import AuditRecord, PolicyDecision
 
 OPA_URL = "http://localhost:8181"
-_POLICY_PATH = "/v1/data/tack/policy/decision"
+_DECISION_PATH = "/v1/data/tack/policy/decision"
+_VERSION_PATH = "/v1/data/tack/policy/policy_version"
+
+_cached_version: str | None = None
+
+
+async def get_policy_version() -> str:
+    global _cached_version
+    if _cached_version is not None:
+        return _cached_version
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{OPA_URL}{_VERSION_PATH}")
+            resp.raise_for_status()
+            _cached_version = str(resp.json().get("result", "unknown"))
+            return _cached_version
+    except Exception:
+        return "unknown"
 
 
 async def policy_check(tool_name: str, args: dict, user: str = "user") -> PolicyDecision:
@@ -11,10 +31,9 @@ async def policy_check(tool_name: str, args: dict, user: str = "user") -> Policy
     payload = {"input": {"tool_name": tool_name, "args": args, "user": user}}
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.post(f"{OPA_URL}{_POLICY_PATH}", json=payload)
+            resp = await client.post(f"{OPA_URL}{_DECISION_PATH}", json=payload)
             resp.raise_for_status()
-            result = resp.json().get("result", "deny")
-            return PolicyDecision(result)
+            return PolicyDecision(resp.json().get("result", "deny"))
     except httpx.ConnectError:
         print("\n[POLICY] OPA is not reachable — failing closed (deny).")
         print("  Start OPA with: opa run --server --addr :8181 policies/")
@@ -32,7 +51,6 @@ async def request_approval(tool_name: str, args: dict) -> bool:
     for k, v in args.items():
         print(f"  {k}: {v}")
     print(f"{'─'*50}")
-
     loop = asyncio.get_event_loop()
     answer = await loop.run_in_executor(None, lambda: input("  Approve? [y/N]: "))
     approved = answer.strip().lower() == "y"
@@ -42,18 +60,41 @@ async def request_approval(tool_name: str, args: dict) -> bool:
 
 async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool, str]:
     """Run policy check and approval flow. Returns (should_execute, reason)."""
+    from tack_ai.audit import append, current_run_id, redact_args
+
     decision = await policy_check(tool_name, args, user)
+    version = await get_policy_version()
+    approver: str | None = None
+    approved_at: datetime | None = None
 
     if decision == PolicyDecision.allow:
-        return True, "allowed"
-
-    if decision == PolicyDecision.deny:
-        return False, f"policy denied '{tool_name}'"
-
-    if decision == PolicyDecision.require_approval:
+        ok, reason = True, "allowed"
+    elif decision == PolicyDecision.deny:
+        ok, reason = False, f"policy denied '{tool_name}'"
+    elif decision == PolicyDecision.require_approval:
         approved = await request_approval(tool_name, args)
         if approved:
-            return True, "approved by user"
-        return False, f"user denied '{tool_name}'"
+            approver = user
+            approved_at = datetime.now(timezone.utc)
+            ok, reason = True, "approved by user"
+        else:
+            ok, reason = False, f"user denied '{tool_name}'"
+    else:
+        ok, reason = False, "unknown policy decision"
 
-    return False, "unknown policy decision"
+    run_id = current_run_id.get()
+    if run_id:
+        append(AuditRecord(
+            run_id=run_id,
+            actor=user,
+            event_type="policy_decision",
+            tool_name=tool_name,
+            tool_args=redact_args(args),
+            policy_decision=decision,
+            policy_version=version,
+            approver=approver,
+            approved_at=approved_at,
+            outcome="executed" if ok else "blocked",
+        ))
+
+    return ok, reason
