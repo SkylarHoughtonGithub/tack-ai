@@ -12,6 +12,7 @@ from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from tack_ai.config import Settings
+from tack_ai.policy import enforce
 from tack_ai.router import RuleBasedRouter, LLMRouter, Route, ExecutionPath, load_model_config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -42,8 +43,11 @@ agent: Agent[None, ResearchAnswer] = Agent(
 
 
 @agent.tool_plain
-def web_search(query: str) -> str:
+async def web_search(query: str) -> str:
     """Search the web for current information on a topic."""
+    ok, reason = await enforce("web_search", {"query": query})
+    if not ok:
+        return f"Error: {reason}."
     # Stub — replaced with real search in Phase 7
     return (
         f"[stub] Search results for '{query}':\n"
@@ -53,14 +57,69 @@ def web_search(query: str) -> str:
 
 
 @agent.tool_plain
-def read_file(filename: str) -> str:
+async def read_file(filename: str) -> str:
     """Read a file from the project folder. Only files within the project are accessible."""
+    ok, reason = await enforce("read_file", {"filename": filename})
+    if not ok:
+        return f"Error: {reason}."
     target = (PROJECT_ROOT / filename).resolve()
     if not str(target).startswith(str(PROJECT_ROOT)):
         return "Error: access outside the project folder is not allowed."
     if not target.exists():
         return f"Error: file '{filename}' not found."
     return target.read_text()
+
+
+@agent.tool_plain
+async def write_file(path: str, content: str) -> str:
+    """Write content to a file. Paths inside drafts/ are allowed; others require approval."""
+    ok, reason = await enforce("write_file", {"path": path})
+    if not ok:
+        return f"Error: {reason}."
+    target = (PROJECT_ROOT / path).resolve()
+    if not str(target).startswith(str(PROJECT_ROOT)):
+        return "Error: access outside the project folder is not allowed."
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content)
+    return f"Written {len(content)} bytes to {path}."
+
+
+@agent.tool_plain
+async def run_code(code: str, language: str = "python") -> str:
+    """Run code in a sandbox. Always requires approval."""
+    ok, reason = await enforce("run_code", {"language": language})
+    if not ok:
+        return f"Error: {reason}."
+    # Stub — sandboxed execution wired in Phase 8
+    return f"[stub] Would execute {language} code ({len(code)} chars)."
+
+
+@agent.tool_plain
+async def draft_email(to: str, subject: str, body: str) -> str:
+    """Draft an email without sending it."""
+    ok, reason = await enforce("draft_email", {"to": to, "subject": subject})
+    if not ok:
+        return f"Error: {reason}."
+    return f"[draft] To: {to}\nSubject: {subject}\n\n{body}"
+
+
+@agent.tool_plain
+async def send_email(to: str, subject: str, body: str) -> str:
+    """Send an email. Always requires approval."""
+    ok, reason = await enforce("send_email", {"to": to, "subject": subject})
+    if not ok:
+        return f"Error: {reason}."
+    # Stub — real sending wired later
+    return f"[stub] Email sent to {to}."
+
+
+@agent.tool_plain
+async def delete_file(path: str) -> str:
+    """Delete a file. This operation is never permitted."""
+    ok, reason = await enforce("delete_file", {"path": path})
+    if not ok:
+        return f"Error: {reason}."
+    return "Deleted."  # unreachable — policy always denies
 
 
 def _build_model(model_str: str):
