@@ -43,6 +43,27 @@ decision := "require_approval" if {
     input.tool_name == "send_email"
 }
 
+# ── Filesystem MCP tools (proxied through gateway) ───────────────────────────
+
+# Read-only filesystem operations: always allow
+decision := "allow" if {
+    input.tool_name in {
+        "list_directory", "directory_tree", "search_files",
+        "get_file_info", "list_allowed_directories", "read_multiple_files",
+    }
+}
+
+# Filesystem writes: reuse same path rules as write_file
+decision := "allow" if {
+    input.tool_name in {"create_directory"}
+    startswith(input.args.path, "drafts/")
+}
+
+decision := "require_approval" if {
+    input.tool_name in {"move_file", "create_directory"}
+    not startswith(input.args.path, "drafts/")
+}
+
 # ── File deletion ────────────────────────────────────────────────────────────
 # delete_file has no allow rule — stays at default "deny" regardless of args.
 

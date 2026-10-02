@@ -2446,12 +2446,14 @@ dependencies = [
     { name = "anthropic" },
     { name = "beautifulsoup4" },
     { name = "logfire" },
+    { name = "mcp" },
     { name = "openfga-sdk" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-ai" },
     { name = "pydantic-evals" },
     { name = "pydantic-settings" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -2459,12 +2461,14 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.130.0" },
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "logfire", extras = ["pydantic-ai"], specifier = ">=5.1.1" },
+    { name = "mcp", specifier = ">=1.0.0" },
     { name = "openfga-sdk", specifier = ">=0.10.5" },
     { name = "pgvector", specifier = ">=0.5.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic-ai", specifier = ">=0.8.1" },
     { name = "pydantic-evals", specifier = ">=2.52.0" },
     { name = "pydantic-settings", specifier = ">=2.11.0" },
+    { name = "uvicorn", specifier = ">=0.30.0" },
 ]
 
 [[package]]

@@ -34,6 +34,12 @@ settings.check_providers(required=["anthropic"])
 logfire.configure(token=settings.logfire_token or None)
 logfire.instrument_pydantic_ai()
 
+# Phase 7 — MCP toolsets (optional; agent works fine without them)
+_mcp_servers: list = []
+if settings.mcp_gateway_url:
+    from pydantic_ai.mcp import MCPToolset
+    _mcp_servers.append(MCPToolset(settings.mcp_gateway_url).prefixed("fs"))
+
 # Phase 6 services — initialised lazily so the agent still starts without a DB.
 _memory: ConversationMemory | None = None
 _fga: FGAClient | None = None
@@ -83,6 +89,7 @@ agent: Agent[None, ResearchAnswer] = Agent(
         "When search_documents returns relevant passages, cite the source paths. "
         "Always cite sources. Be concise."
     ),
+    toolsets=_mcp_servers or None,
 )
 
 
@@ -278,6 +285,8 @@ async def run(question: str) -> None:
     print(f"Route:    {route.tier.value} | {route.reasoning_effort.value} effort | "
           f"{route.execution_path.value} | {route.reason}")
     print(f"Model:    {model_str}")
+    if _mcp_servers:
+        print(f"MCP:      {len(_mcp_servers)} server(s) active")
     if route.execution_path == ExecutionPath.batch:
         print("          (batch path noted — executing realtime; full batch API in Phase 9)")
 
