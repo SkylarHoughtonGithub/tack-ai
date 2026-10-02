@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     router_type: str = "llm"  # "llm" (default) or "rule_based" (fallback, no OpenAI key needed)
     task_budget_usd: float = 0.10
 
+    # Phase 6 — RAG and memory
+    database_url: str | None = None          # e.g. postgresql://tack_ai:tack_ai@localhost/tack_ai
+    openfga_url: str = "http://localhost:8080"
+    openfga_store_id: str | None = None
+    openfga_model_id: str | None = None
+
     def available_providers(self) -> list[str]:
         return [
             attr.replace("_api_key", "")

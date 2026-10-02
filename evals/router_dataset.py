@@ -150,5 +150,28 @@ ROUTER_DATASET: Dataset[str, RouteTier, None] = Dataset(
             ),
             expected_output=RouteTier.deep_reasoning,
         ),
+
+        # ── Retrieval questions (Phase 6) ─────────────────────────────────────
+        Case(name="opa_fail_closed",    inputs="What does fail-closed mean in OPA?",                  expected_output=RouteTier.simple),
+        Case(name="hash_chain_purpose", inputs="What does a hash chain prove about an audit trail?",  expected_output=RouteTier.simple),
+        Case(name="prompt_caching",     inputs="How does Anthropic prompt caching reduce costs?",     expected_output=RouteTier.general),
+        Case(name="rag_auth_filter",    inputs="How should a RAG system filter results by user permissions?", expected_output=RouteTier.general),
+        Case(
+            name="chunking_strategy",
+            inputs=(
+                "Compare fixed-size and heading-based chunking strategies for a retrieval system over "
+                "technical documentation. When would you choose one over the other?"
+            ),
+            expected_output=RouteTier.general,
+        ),
+        Case(
+            name="rag_full_design",
+            inputs=(
+                "Design a complete RAG pipeline for a private knowledge base with OpenFGA authorization. "
+                "Cover document ingestion from multiple sources (local files and HTTP), chunking, embedding, "
+                "permission-filtered retrieval, and conversation memory with summarization."
+            ),
+            expected_output=RouteTier.deep_reasoning,
+        ),
     ],
 )

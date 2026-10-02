@@ -8,7 +8,7 @@ import genai_prices
 import logfire
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
-from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
@@ -16,9 +16,13 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from tack_ai import audit
 from tack_ai.audit import append, current_run_id
+from tack_ai.auth import FGAClient
 from tack_ai.config import Settings
+from tack_ai.memory import ConversationMemory
 from tack_ai.models import AuditRecord
 from tack_ai.policy import enforce
+from tack_ai.retrieval import format_for_prompt
+from tack_ai.retrieval import search_documents as _search_documents
 from tack_ai.router import ExecutionPath, LLMRouter, Route, RuleBasedRouter, load_model_config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -30,11 +34,43 @@ settings.check_providers(required=["anthropic"])
 logfire.configure(token=settings.logfire_token or None)
 logfire.instrument_pydantic_ai()
 
+# Phase 6 services — initialised lazily so the agent still starts without a DB.
+_memory: ConversationMemory | None = None
+_fga: FGAClient | None = None
+
+
+def _get_memory() -> ConversationMemory | None:
+    global _memory
+    if _memory is None and settings.database_url and settings.anthropic_api_key:
+        _memory = ConversationMemory(
+            db_url=settings.database_url,
+            anthropic_api_key=settings.get_key("anthropic"),
+        )
+    return _memory
+
+
+def _get_fga() -> FGAClient | None:
+    global _fga
+    if _fga is None and settings.openfga_store_id and settings.openfga_model_id:
+        _fga = FGAClient(
+            api_url=settings.openfga_url,
+            store_id=settings.openfga_store_id,
+            model_id=settings.openfga_model_id,
+        )
+    return _fga
+
 
 class ResearchAnswer(BaseModel):
     summary: str
     sources: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
+
+# Prompt caching is enabled via model_settings on each run() call so that the
+# system prompt (which is long and repeated) is cached across turns.
+_CACHE_SETTINGS = AnthropicModelSettings(
+    anthropic_cache_instructions=True,
+    anthropic_cache_tool_definitions=True,
+)
 
 agent: Agent[None, ResearchAnswer] = Agent(
     AnthropicModel(
@@ -44,6 +80,7 @@ agent: Agent[None, ResearchAnswer] = Agent(
     output_type=ResearchAnswer,
     system_prompt=(
         "You are a research assistant. Use your tools to answer questions. "
+        "When search_documents returns relevant passages, cite the source paths. "
         "Always cite sources. Be concise."
     ),
 )
@@ -124,6 +161,43 @@ async def delete_file(path: str) -> str:
     if not ok:
         return f"Error: {reason}."
     return "Deleted."  # unreachable — policy always denies
+
+
+@agent.tool_plain
+async def search_documents(query: str, user: str = "user") -> str:
+    """Search the indexed document store and return the most relevant passages."""
+    ok, reason = await enforce("search_documents", {"query": query[:80]})
+    if not ok:
+        return f"Error: {reason}."
+
+    if not settings.database_url or not settings.openai_api_key:
+        return "Document search is not configured (DATABASE_URL or OPENAI_API_KEY missing)."
+
+    fga = _get_fga()
+    if fga is None:
+        return "Document search is not configured (OPENFGA_STORE_ID or OPENFGA_MODEL_ID missing)."
+
+    results = await _search_documents(
+        query=query,
+        user=user,
+        db_url=settings.database_url,
+        openai_api_key=settings.get_key("openai"),
+        fga=fga,
+    )
+
+    run_id = current_run_id.get()
+    if run_id:
+        returned_origins = [r["origin"] for r in results]
+        append(AuditRecord(
+            run_id=run_id,
+            actor=user,
+            event_type="retrieval",
+            tool_name="search_documents",
+            tool_args={"query": query[:80], "returned": returned_origins},
+            outcome=f"{len(results)} chunk(s) returned",
+        ))
+
+    return format_for_prompt(results)
 
 
 def _build_model(model_str: str):
@@ -218,17 +292,42 @@ async def run(question: str) -> None:
         provider=provider,
     ))
 
-    # 3. Run
-    result = await agent.run(question, model=model)
+    # 3. Conversation memory context
+    session_id = run_id  # one session per run; multi-turn sessions in Phase 10
+    memory = _get_memory()
+    memory_context = ""
+    if memory:
+        memory_context = await memory.get_context(session_id)
 
-    # 4. Cost
+    full_question = (
+        f"{memory_context}\n\nUser: {question}" if memory_context else question
+    )
+
+    # 4. Run (with prompt caching enabled for Anthropic models)
+    use_cache = provider == "anthropic"
+    result = await agent.run(
+        full_question,
+        model=model,
+        model_settings=_CACHE_SETTINGS if use_cache else None,
+    )
+
+    # 5. Store this turn in memory
+    if memory:
+        await memory.add_turn(session_id, "user", question)
+        await memory.add_turn(session_id, "assistant", result.output.summary)
+
+    # 6. Cost
     cost = _estimate_cost(result.usage, model_str)
     _log_route(question, route, model_str, cost)
+
+    cache_read = result.usage.cache_read_tokens or 0
+    if cache_read:
+        print(f"Cache:    {cache_read} tokens read from cache")
 
     if cost > settings.task_budget_usd:
         print(f"\nWarning: run cost ${cost:.5f} exceeded budget ${settings.task_budget_usd:.5f}")
 
-    # 5. Audit — outcome
+    # 7. Audit — outcome
     append(AuditRecord(
         run_id=run_id,
         actor="user",
@@ -239,7 +338,7 @@ async def run(question: str) -> None:
         cost_usd=cost,
     ))
 
-    # 6. Output
+    # 8. Output
     print("\n=== Tool-call loop ===")
     for msg in result.all_messages():
         print(f"  [{msg.__class__.__name__}]")

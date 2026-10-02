@@ -10,7 +10,7 @@ default decision := "deny"
 # ── Read-only tools ──────────────────────────────────────────────────────────
 
 decision := "allow" if {
-    input.tool_name in {"web_search", "read_file"}
+    input.tool_name in {"web_search", "read_file", "search_documents"}
 }
 
 # ── File writes ──────────────────────────────────────────────────────────────

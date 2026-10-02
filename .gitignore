@@ -6,5 +6,8 @@ __pycache__/
 .DS_Store
 dist/
 *.egg-info/
-docs/
+docs/*.md
+docs/*.pdf
+docs/*.docx
+!docs/sample/
 logs/
