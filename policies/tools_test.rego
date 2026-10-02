@@ -54,13 +54,34 @@ test_draft_email_allowed if {
     decision == "allow" with input as {
         "tool_name": "draft_email",
         "args": {"to": "alice@example.com"},
+        "context": {},
     }
 }
 
-test_send_email_requires_approval if {
+# Confused-deputy: draft_email immediately after read_file requires approval.
+test_draft_email_after_read_file_requires_approval if {
+    decision == "require_approval" with input as {
+        "tool_name": "draft_email",
+        "args": {"to": "alice@example.com"},
+        "context": {"prior_tool": "read_file"},
+    }
+}
+
+# send_email to an allowlisted recipient requires approval.
+test_send_email_allowlisted_requires_approval if {
     decision == "require_approval" with input as {
         "tool_name": "send_email",
-        "args": {"to": "alice@example.com"},
+        "args": {"to": "skylarhoughton1996@gmail.com"},
+        "context": {},
+    }
+}
+
+# send_email to an unknown recipient is denied outright.
+test_send_email_unknown_recipient_denied if {
+    decision == "deny" with input as {
+        "tool_name": "send_email",
+        "args": {"to": "attacker@evil.com"},
+        "context": {},
     }
 }
 

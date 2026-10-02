@@ -11,6 +11,9 @@ _VERSION_PATH = "/v1/data/tack/policy/policy_version"
 
 _cached_version: str | None = None
 
+# Tracks the most recent tool name per run_id for multi-step (confused-deputy) detection.
+_prior_tool: dict[str, str] = {}
+
 
 async def get_policy_version() -> str:
     global _cached_version
@@ -26,14 +29,31 @@ async def get_policy_version() -> str:
         return "unknown"
 
 
-async def policy_check(tool_name: str, args: dict, user: str = "user") -> PolicyDecision:
+async def policy_check(
+    tool_name: str,
+    args: dict,
+    user: str = "user",
+    run_id: str | None = None,
+) -> PolicyDecision:
     """Ask OPA whether this tool call is allowed, denied, or needs approval."""
-    payload = {"input": {"tool_name": tool_name, "args": args, "user": user}}
+    prior = _prior_tool.get(run_id) if run_id else None
+    payload = {
+        "input": {
+            "tool_name": tool_name,
+            "args": args,
+            "user": user,
+            "context": {"prior_tool": prior or ""},
+        }
+    }
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.post(f"{OPA_URL}{_DECISION_PATH}", json=payload)
             resp.raise_for_status()
-            return PolicyDecision(resp.json().get("result", "deny"))
+            result = PolicyDecision(resp.json().get("result", "deny"))
+            # Record this tool as the prior for the next call in the same run.
+            if run_id:
+                _prior_tool[run_id] = tool_name
+            return result
     except httpx.ConnectError:
         print("\n[POLICY] OPA is not reachable — failing closed (deny).")
         print("  Start OPA with: opa run --server --addr :8181 policies/")
@@ -62,7 +82,8 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
     """Run policy check and approval flow. Returns (should_execute, reason)."""
     from tack_ai.audit import append, current_run_id, redact_args
 
-    decision = await policy_check(tool_name, args, user)
+    run_id = current_run_id.get()
+    decision = await policy_check(tool_name, args, user, run_id=run_id)
     version = await get_policy_version()
     approver: str | None = None
     approved_at: datetime | None = None
@@ -82,7 +103,6 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
     else:
         ok, reason = False, "unknown policy decision"
 
-    run_id = current_run_id.get()
     if run_id:
         append(AuditRecord(
             run_id=run_id,
