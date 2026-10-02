@@ -1850,6 +1850,7 @@ dependencies = [
     { name = "anthropic" },
     { name = "logfire" },
     { name = "pydantic-ai" },
+    { name = "pydantic-evals" },
     { name = "pydantic-settings" },
 ]
 
@@ -1858,6 +1859,7 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.130.0" },
     { name = "logfire", extras = ["pydantic-ai"], specifier = ">=5.1.1" },
     { name = "pydantic-ai", specifier = ">=0.8.1" },
+    { name = "pydantic-evals", specifier = ">=2.52.0" },
     { name = "pydantic-settings", specifier = ">=2.11.0" },
 ]
 

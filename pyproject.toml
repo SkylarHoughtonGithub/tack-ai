@@ -10,6 +10,7 @@ dependencies = [
     "anthropic>=0.130.0",
     "logfire[pydantic-ai]>=5.1.1",
     "pydantic-ai>=0.8.1",
+    "pydantic-evals>=2.52.0",
     "pydantic-settings>=2.11.0",
 ]
 
