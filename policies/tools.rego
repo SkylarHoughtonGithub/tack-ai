@@ -35,13 +35,31 @@ decision := "require_approval" if {
 
 # ── Email ────────────────────────────────────────────────────────────────────
 
+# Allowlist of known-safe recipients. send_email to any other address is denied.
+email_allowlist := {"skylarhoughton1996@gmail.com"}
+
 decision := "allow" if {
     input.tool_name == "draft_email"
+    not _prior_read_file
 }
 
+# Stretch: confused-deputy guard — drafting email immediately after reading a file
+# requires approval (model could be reading secrets then exfiltrating them).
+decision := "require_approval" if {
+    input.tool_name == "draft_email"
+    _prior_read_file
+}
+
+_prior_read_file if {
+    input.context.prior_tool == "read_file"
+}
+
+# send_email to a known-safe recipient still requires human approval.
 decision := "require_approval" if {
     input.tool_name == "send_email"
+    input.args.to in email_allowlist
 }
+# send_email to any other recipient: default "deny" blocks it.
 
 # ── Filesystem MCP tools (proxied through gateway) ───────────────────────────
 

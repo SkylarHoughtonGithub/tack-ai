@@ -39,4 +39,4 @@ All Python commands use `uv run` — no need to activate the venv manually.
 
 ## Phase status
 
-**Phases 0–7 complete.** Next: Phase 8 — security hardening and red-teaming.
+**Phases 0–8 complete.** Next: Phase 9 — durable execution.
