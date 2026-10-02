@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     openfga_store_id: str | None = None
     openfga_model_id: str | None = None
 
+    # Phase 7 — MCP
+    mcp_gateway_url: str | None = None          # e.g. http://localhost:8082/sse
+    mcp_filesystem_root: str | None = None      # root for filesystem MCP server (defaults to project root)
+
     def available_providers(self) -> list[str]:
         return [
             attr.replace("_api_key", "")

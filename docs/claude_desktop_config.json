@@ -1,0 +1,10 @@
+{
+  "_comment": "Paste the contents of 'mcpServers' into ~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%/Claude/claude_desktop_config.json (Windows). Update 'cwd' to the absolute path of this repo.",
+  "mcpServers": {
+    "tack-ai-tools": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "tack_ai.mcp_server"],
+      "cwd": "/path/to/tack-ai"
+    }
+  }
+}

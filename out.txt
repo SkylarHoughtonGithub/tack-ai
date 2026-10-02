@@ -1,0 +1,2 @@
+Logfire project URL: 
+https://logfire-us.pydantic.dev/skylar-houghton-github/tack-ai
