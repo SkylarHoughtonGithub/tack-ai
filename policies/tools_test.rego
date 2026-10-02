@@ -12,6 +12,10 @@ test_read_file_allowed if {
     decision == "allow" with input as {"tool_name": "read_file", "args": {}}
 }
 
+test_search_documents_allowed if {
+    decision == "allow" with input as {"tool_name": "search_documents", "args": {"query": "OPA policies"}}
+}
+
 # ── File writes ───────────────────────────────────────────────────────────────
 
 test_write_file_drafts_allowed if {

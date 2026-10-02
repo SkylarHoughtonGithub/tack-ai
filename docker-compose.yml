@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: tack_ai
+      POSTGRES_USER: tack_ai
+      POSTGRES_PASSWORD: tack_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tack_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  openfga:
+    image: openfga/openfga:latest
+    command: run
+    environment:
+      OPENFGA_DATASTORE_ENGINE: memory
+      OPENFGA_HTTP_ADDR: "0.0.0.0:8080"
+    ports:
+      - "8080:8080"   # HTTP API
+      - "3000:3000"   # Playground UI
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/openfga", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
