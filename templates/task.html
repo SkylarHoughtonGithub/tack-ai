@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Task {{ run_id[:8] }} — Tack-AI{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-3 mb-4">
+  <a href="/" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">← back</a>
+  <h1 class="font-bold">Task <span class="font-mono text-gray-400">{{ run_id[:8] }}</span></h1>
+  <span id="status-badge" class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">running</span>
+</div>
+
+<div class="bg-white rounded border p-4 mb-4">
+  <div class="text-gray-400 text-xs mb-1">Question</div>
+  <div class="text-sm">{{ question }}</div>
+</div>
+
+<!-- Event log -->
+<div id="event-log"
+     class="bg-gray-900 text-gray-100 rounded p-4 font-mono text-sm space-y-0.5 min-h-40 max-h-96 overflow-y-auto">
+  <span class="text-gray-500">Connecting…</span>
+</div>
+
+<!-- Answer box (hidden until done) -->
+<div id="answer-box" class="hidden bg-white rounded border p-5 mt-4">
+  <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Answer</h2>
+  <p id="answer-summary" class="text-sm leading-relaxed mb-3"></p>
+  <div class="text-xs text-gray-400 space-y-1 border-t pt-3 font-mono">
+    <div>sources:    <span id="answer-sources" class="text-gray-600">—</span></div>
+    <div>confidence: <span id="answer-confidence" class="text-gray-600">—</span></div>
+    <div>cost:       <span id="answer-cost" class="text-gray-600">—</span></div>
+    <div>tokens:     <span id="answer-tokens" class="text-gray-600">—</span></div>
+  </div>
+</div>
+
+<!-- Approval banner (hidden until needed) -->
+<div id="approval-banner" class="hidden bg-orange-50 border border-orange-200 rounded p-5 mt-4">
+  <h3 class="font-bold text-orange-800 text-sm mb-2">Approval required</h3>
+  <div id="approval-details" class="text-xs text-orange-700 font-mono mb-4 whitespace-pre-wrap"></div>
+  <div class="flex gap-3">
+    <button onclick="resolveApproval(true)"
+            class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition-colors">
+      Approve
+    </button>
+    <button onclick="resolveApproval(false)"
+            class="bg-red-100 text-red-700 px-4 py-2 rounded text-sm hover:bg-red-200 transition-colors">
+      Deny
+    </button>
+  </div>
+</div>
+
+<script>
+  const runId = {{ run_id | tojson }};
+  const log = document.getElementById("event-log");
+  let currentApprovalId = null;
+
+  function logLine(text, cls) {
+    const el = document.createElement("div");
+    if (cls) el.className = cls;
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function setStatus(label, cls) {
+    const badge = document.getElementById("status-badge");
+    badge.className = "text-xs px-2 py-0.5 rounded " + cls;
+    badge.textContent = label;
+  }
+
+  function resolveApproval(approve) {
+    if (!currentApprovalId) return;
+    const path = "/approvals/" + currentApprovalId + (approve ? "/approve" : "/deny");
+    fetch(path, { method: "POST" }).then(() => {
+      document.getElementById("approval-banner").classList.add("hidden");
+      logLine(approve ? "→ approved" : "→ denied",
+              approve ? "text-green-400" : "text-red-400");
+      currentApprovalId = null;
+    });
+  }
+
+  log.innerHTML = "";
+
+  const es = new EventSource("/tasks/" + runId + "/stream");
+
+  es.onmessage = function(e) {
+    const d = JSON.parse(e.data);
+
+    if (d.type === "status") {
+      logLine("» " + d.message, "text-gray-400");
+
+    } else if (d.type === "warning") {
+      d.message.split("\n").forEach(function(line) {
+        logLine("⚠ " + line, "text-orange-300");
+      });
+
+    } else if (d.type === "routing") {
+      logLine(
+        "route: " + d.tier + " / " + d.effort + " — " + d.reason,
+        "text-yellow-300"
+      );
+
+    } else if (d.type === "answer") {
+      document.getElementById("answer-summary").textContent = d.summary;
+      document.getElementById("answer-sources").textContent =
+        (d.sources && d.sources.length) ? d.sources.join(", ") : "none";
+      document.getElementById("answer-confidence").textContent =
+        Math.round((d.confidence || 0) * 100) + "%";
+      document.getElementById("answer-cost").textContent =
+        "$" + (d.cost_usd || 0).toFixed(5);
+      document.getElementById("answer-tokens").textContent =
+        "in=" + (d.input_tokens || 0) + " out=" + (d.output_tokens || 0);
+      document.getElementById("answer-box").classList.remove("hidden");
+      logLine("✓ answer ready", "text-green-400");
+
+    } else if (d.type === "approval_required") {
+      currentApprovalId = d.approval_id;
+      document.getElementById("approval-details").textContent =
+        "tool: " + d.tool_name + "\nargs: " + JSON.stringify(d.args, null, 2);
+      document.getElementById("approval-banner").classList.remove("hidden");
+      logLine("⚠ approval required: " + d.tool_name, "text-orange-300");
+
+    } else if (d.type === "error") {
+      logLine("✗ " + d.message, "text-red-400");
+      setStatus("failed", "bg-red-100 text-red-700");
+      es.close();
+
+    } else if (d.type === "done") {
+      const badge = document.getElementById("status-badge");
+      if (badge.textContent !== "failed") {
+        setStatus("done", "bg-green-100 text-green-700");
+      }
+      es.close();
+    }
+  };
+
+  es.onerror = function() {
+    if (document.getElementById("status-badge").textContent === "running") {
+      logLine("connection lost", "text-red-400");
+      setStatus("failed", "bg-red-100 text-red-700");
+    }
+    es.close();
+  };
+</script>
+
+{% endblock %}

@@ -12,8 +12,13 @@ A personal AI agent harness built as a structured learning project. The goal is 
 # Start OPA policy server (required before running the agent)
 opa run --server --addr :8181 policies/
 
-# Run the agent (in a separate terminal)
+# Run the agent CLI (in a separate terminal)
 uv run python -m tack_ai.agent
+
+# Start the web console (Phase 10)
+uv run uvicorn tack_ai.web:app --reload
+# then open http://localhost:8000  (default credentials: admin / changeme)
+# set WEB_USERNAME and WEB_PASSWORD in .env to change them
 ```
 
 All Python commands use `uv run` — no need to activate the venv manually.
@@ -39,4 +44,4 @@ All Python commands use `uv run` — no need to activate the venv manually.
 
 ## Phase status
 
-**Phases 0–8 complete.** Next: Phase 9 — durable execution.
+**Phases 0–10 complete.** Next: Phase 11 — comparisons (LangGraph, Cedar, Claude Agent SDK).

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Login — Tack-AI{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-20">
+  <h1 class="text-xl font-bold mb-6">Tack-AI Console</h1>
+  {% if error %}
+  <div class="bg-red-50 border border-red-200 text-red-700 rounded px-4 py-2 text-sm mb-4">
+    {{ error }}
+  </div>
+  {% endif %}
+  <form method="post" action="/login" class="bg-white rounded border p-6 space-y-4">
+    <div>
+      <label class="block text-xs text-gray-500 mb-1">Username</label>
+      <input name="username" type="text" autofocus
+             class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-500 mb-1">Password</label>
+      <input name="password" type="password"
+             class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+    </div>
+    <button type="submit"
+            class="w-full bg-gray-900 text-white py-2 rounded text-sm hover:bg-gray-700 transition-colors">
+      Sign in
+    </button>
+  </form>
+</div>
+{% endblock %}
