@@ -231,6 +231,11 @@ async def send_email(to: str, subject: str, body: str) -> str:
     ok, reason = await enforce("send_email", {"to": to, "subject": subject})
     if not ok:
         return f"Error: {reason}."
+    # Idempotency guard: identical (to, subject, body) tuples never send twice,
+    # even if a crash causes the step to be retried.
+    if settings.database_url:
+        from tack_ai.durable import check_or_record_email
+        return await check_or_record_email(to, subject, body)
     return f"[stub] Email sent to {to}."
 
 

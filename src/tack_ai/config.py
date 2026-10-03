@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     mcp_gateway_url: str | None = None          # e.g. http://localhost:8082/sse
     mcp_filesystem_root: str | None = None      # root for filesystem MCP server (defaults to project root)
 
+    # Phase 9 — durable execution
+    temporal_host: str = "localhost:7233"        # Temporal gRPC endpoint
+
     def available_providers(self) -> list[str]:
         return [
             attr.replace("_api_key", "")
