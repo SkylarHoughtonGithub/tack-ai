@@ -28,6 +28,8 @@ import sqlite3
 import uuid
 from contextlib import closing
 from datetime import datetime, timezone
+
+from markupsafe import Markup
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +48,15 @@ TEMPLATES_DIR = Path(__file__).parents[2] / "templates"
 
 app = FastAPI(title="Tack-AI Console")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-templates.env.filters["tojson"] = lambda v, indent=None: json.dumps(v, indent=indent)
+def _tojson(v: object, indent: int | None = None) -> Markup:
+    # Produce JSON then escape HTML-special chars using \uXXXX sequences so
+    # the output is safe inside <script> tags.  Return Markup so Jinja2 does
+    # not run a second HTML-escaping pass (which would turn " into &quot;).
+    s = json.dumps(v, indent=indent)
+    s = s.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
+    return Markup(s)
+
+templates.env.filters["tojson"] = _tojson
 
 # ── Session store ─────────────────────────────────────────────────────────────
 
@@ -112,6 +122,37 @@ async def _web_request_approval(
     return bool(info.get("approved"))
 
 
+async def _preflight(state: RunState) -> None:
+    """Push non-fatal warnings for services that are configured but unreachable."""
+    import httpx  # noqa: PLC0415
+
+    # OPA — if unreachable, every tool call will be fail-closed (denied).
+    # The run still proceeds but no tool will execute.
+    opa_url = "http://localhost:8181/health"
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as c:
+            await c.get(opa_url)
+    except Exception:
+        state.push({
+            "type": "warning",
+            "message": (
+                "OPA is not reachable — all tool calls will be denied (fail-closed).\n"
+                "Start it with:  opa run --server --addr :8181 policies/"
+            ),
+        })
+
+    # Postgres/pgvector — if DATABASE_URL is not set, search_documents
+    # and conversation memory are silently unavailable.
+    if not settings.database_url:
+        state.push({
+            "type": "warning",
+            "message": (
+                "DATABASE_URL is not set — document search and conversation memory "
+                "are disabled."
+            ),
+        })
+
+
 async def _run_agent_bg(run_id: str, state: RunState) -> None:
     from tack_ai.agent import (  # noqa: PLC0415
         _CACHE_SETTINGS,
@@ -128,6 +169,7 @@ async def _run_agent_bg(run_id: str, state: RunState) -> None:
     )
 
     try:
+        await _preflight(state)
         state.push({"type": "status", "message": "Routing…"})
         route = RuleBasedRouter().route(state.question)
         state.tier = route.tier.value
@@ -186,7 +228,17 @@ async def _run_agent_bg(run_id: str, state: RunState) -> None:
         state.status = "done"
 
     except Exception as exc:
-        state.push({"type": "error", "message": str(exc)})
+        msg = str(exc)
+        if "All connection attempts failed" in msg or "Client failed to connect" in msg:
+            from tack_ai.config import Settings as _S  # noqa: PLC0415
+            cfg = _S()
+            if cfg.mcp_gateway_url:
+                msg = (
+                    f"MCP gateway at {cfg.mcp_gateway_url!r} is not reachable.\n"
+                    "Start it with:  uv run python -m tack_ai.mcp_gateway\n"
+                    "Or unset MCP_GATEWAY_URL in .env to run without MCP tools."
+                )
+        state.push({"type": "error", "message": msg})
         state.status = "failed"
     finally:
         state.push({"type": "done"})

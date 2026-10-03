@@ -87,6 +87,11 @@
     if (d.type === "status") {
       logLine("» " + d.message, "text-gray-400");
 
+    } else if (d.type === "warning") {
+      d.message.split("\n").forEach(function(line) {
+        logLine("⚠ " + line, "text-orange-300");
+      });
+
     } else if (d.type === "routing") {
       logLine(
         "route: " + d.tier + " / " + d.effort + " — " + d.reason,
