@@ -31,5 +31,35 @@ services:
       timeout: 5s
       retries: 10
 
+  # Phase 9 — Temporal dev server (comparison module).
+  # Start with: docker compose up temporal temporal-ui
+  temporal:
+    image: temporalio/auto-setup:1.25
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=tack_ai
+      - POSTGRES_PWD=tack_ai
+      - POSTGRES_SEEDS=postgres
+    ports:
+      - "7233:7233"   # gRPC frontend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "temporal", "workflow", "list", "--address", "localhost:7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  temporal-ui:
+    image: temporalio/ui:2.31
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    ports:
+      - "8088:8080"   # Temporal Web UI
+    depends_on:
+      - temporal
+
 volumes:
   pgdata:

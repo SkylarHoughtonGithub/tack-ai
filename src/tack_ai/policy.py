@@ -1,9 +1,14 @@
 import asyncio
+from contextvars import ContextVar
 from datetime import datetime, timezone
 
 import httpx
 
 from tack_ai.models import AuditRecord, PolicyDecision
+
+# Set to True inside a DBOS workflow step so approve/deny uses DB polling
+# instead of a terminal prompt.
+durable_mode: ContextVar[bool] = ContextVar("durable_mode", default=False)
 
 OPA_URL = "http://localhost:8181"
 _DECISION_PATH = "/v1/data/tack/policy/decision"
@@ -64,7 +69,20 @@ async def policy_check(
 
 
 async def request_approval(tool_name: str, args: dict) -> bool:
-    """Prompt the user to approve or deny a tool call from the terminal."""
+    """Approve or deny a tool call.
+
+    In normal mode: prompt the terminal.
+    In durable mode (durable_mode ContextVar is True): write a pending_approvals
+    row and poll until an external process resolves it.  The row persists across
+    restarts so a retried tool call continues waiting on the same approval.
+    """
+    if durable_mode.get():
+        # Lazy import to avoid circular dependency at module load time.
+        from tack_ai.durable import wait_for_db_approval
+        from tack_ai.audit import current_run_id
+        run_id = current_run_id.get()
+        return await wait_for_db_approval(run_id, tool_name, args)
+
     print(f"\n{'─'*50}")
     print(f"  APPROVAL REQUIRED")
     print(f"  Tool: {tool_name}")
