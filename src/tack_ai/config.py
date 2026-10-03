@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Phase 9 — durable execution
     temporal_host: str = "localhost:7233"        # Temporal gRPC endpoint
 
+    # Phase 10 — web console
+    web_username: str = "admin"
+    web_password: str = "changeme"
+
     def available_providers(self) -> list[str]:
         return [
             attr.replace("_api_key", "")

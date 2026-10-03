@@ -1,6 +1,8 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from datetime import datetime, timezone
+from typing import Any
 
 import httpx
 
@@ -9,6 +11,12 @@ from tack_ai.models import AuditRecord, PolicyDecision
 # Set to True inside a DBOS workflow step so approve/deny uses DB polling
 # instead of a terminal prompt.
 durable_mode: ContextVar[bool] = ContextVar("durable_mode", default=False)
+
+# Web-mode override: when set, request_approval calls this instead of the
+# terminal prompt or DB polling.  Set per-task in web.py's background runner.
+_approval_override: ContextVar[
+    Callable[[str, dict[str, Any]], Awaitable[bool]] | None
+] = ContextVar("_approval_override", default=None)
 
 OPA_URL = "http://localhost:8181"
 _DECISION_PATH = "/v1/data/tack/policy/decision"
@@ -71,11 +79,15 @@ async def policy_check(
 async def request_approval(tool_name: str, args: dict) -> bool:
     """Approve or deny a tool call.
 
-    In normal mode: prompt the terminal.
-    In durable mode (durable_mode ContextVar is True): write a pending_approvals
-    row and poll until an external process resolves it.  The row persists across
-    restarts so a retried tool call continues waiting on the same approval.
+    Priority:
+    1. _approval_override (web mode — asyncio.Event-based, no terminal needed)
+    2. durable_mode (DBOS — DB-polling, survives restarts)
+    3. terminal prompt (CLI default)
     """
+    override = _approval_override.get()
+    if override is not None:
+        return await override(tool_name, args)
+
     if durable_mode.get():
         # Lazy import to avoid circular dependency at module load time.
         from tack_ai.durable import wait_for_db_approval
