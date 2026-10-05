@@ -6,7 +6,10 @@ from typing import Any
 
 import httpx
 
+from tack_ai.config import Settings
 from tack_ai.models import AuditRecord, PolicyDecision
+
+settings = Settings()
 
 # Set to True inside a DBOS workflow step so approve/deny uses DB polling
 # instead of a terminal prompt.
@@ -48,8 +51,20 @@ async def policy_check(
     user: str = "user",
     run_id: str | None = None,
 ) -> PolicyDecision:
-    """Ask OPA whether this tool call is allowed, denied, or needs approval."""
+    """Evaluate policy for a tool call — routes to Cedar or OPA based on config.
+
+    Cedar handles tool-authorization only; routing/budget calls (__route__)
+    always go to OPA regardless of the policy_engine setting.
+    """
     prior = _prior_tool.get(run_id) if run_id else None
+
+    if settings.policy_engine == "cedar" and tool_name != "__route__":
+        from cedar.cedar_policy import cedar_decide
+        decision = cedar_decide(tool_name, args, {"prior_tool": prior or ""})
+        if run_id:
+            _prior_tool[run_id] = tool_name
+        return decision
+
     payload = {
         "input": {
             "tool_name": tool_name,

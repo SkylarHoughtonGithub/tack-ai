@@ -102,17 +102,11 @@ def cedar_decide(
 # ── Formal analysis ───────────────────────────────────────────────────────────
 
 def prove_delete_file_denied() -> bool:
-    """Demonstrate that delete_file is never permitted under any context.
+    """Return True if delete_file is denied under all tested contexts.
 
-    Cedar's deny-by-default means: if no permit rule mentions a resource,
-    it is structurally impossible for Cedar to allow it. This exhaustive
-    check confirms that empirically across a broad context matrix.
-
-    The formal argument: inspect tool_policy.cedar — there is no
-    `permit(... resource == Tool::"delete_file" ...)` clause. Cedar requires
-    an explicit permit for every allow decision. Therefore the property
-    "no policy ever permits delete_file" is provable by inspection of the
-    policy set, and cedarpy's evaluator confirms it across all contexts.
+    No permit rule in tool_policy.cedar mentions delete_file. Cedar's
+    deny-by-default makes this a structural guarantee; this function
+    confirms it empirically across a representative context matrix.
     """
     test_contexts = [
         {"path": "logs/old.log", "prior_tool": "", "to": ""},
@@ -199,29 +193,13 @@ def run_tests(verbose: bool = True) -> tuple[int, int]:
             print(f"  [{status}] {tool_name!r:30s}  expected={expected.value!r:20s}  got={got.value!r}")
 
     if verbose:
-        print(f"\n  {passed}/{total} tool-authorization tests passed")
-        print(f"\n  Routing tests ({len(_ROUTING_SKIPPED)}) skipped — Cedar is authorization-only.")
-        print("  Routing / budget rules remain in OPA.")
+        print(f"\n  {passed}/{total} passed")
 
     return passed, total
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Cedar policy test suite (Phase 11)")
-    print("=" * 60)
     passed, total = run_tests()
-
-    print("\n" + "─" * 60)
-    print("Formal analysis: delete_file is never permitted")
     holds = prove_delete_file_denied()
-    print(f"  Property holds: {holds}")
-    print(
-        "  Proof: no permit rule in tool_policy.cedar mentions\n"
-        "  Tool::\"delete_file\". Cedar's deny-by-default means the\n"
-        "  absence of a permit is a structural guarantee — unlike OPA,\n"
-        "  where you must read all rules to confirm nothing matches.\n"
-        "  (Cedar's CLI can verify this formally via SMT; cedarpy\n"
-        "  confirms it empirically across all relevant contexts.)"
-    )
-    print("\n  Exiting:", 0 if passed == total else 1)
+    print(f"\ndelete_file never permitted: {holds}")
+    raise SystemExit(0 if passed == total and holds else 1)

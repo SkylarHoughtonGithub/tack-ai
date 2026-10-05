@@ -1,13 +1,9 @@
 """
-Phase 11 — LangGraph comparison module.
+Phase 11 — LangGraph approval flow module.
 
-Implements the same approval flow as the Pydantic AI harness (policy.py enforce())
-as a standalone LangGraph graph. The graph is NOT a replacement for the main
-system — run it alongside to compare the two approaches directly.
-
-LangGraph represents each step as an explicit node and edge, making state
-transitions visible and debuggable. The Pydantic AI equivalent is the
-enforce() function in policy.py, which is more concise but less inspectable.
+Implements the approval gate as an explicit LangGraph graph with a
+MemorySaver checkpointer and interrupt()-based human-in-the-loop step.
+Runs alongside the main Pydantic AI harness; not a replacement for it.
 
 Usage:
     uv run python -m tack_ai.langgraph_approval
@@ -149,18 +145,10 @@ async def demo() -> None:
         )
         print(f"\n[RESULT] {final.get('result')}")
     else:
-        # Completed without interrupting (allow or deny path).
         state = graph.get_state(config).values
         decision = state.get("policy_decision")
-        print(f"\n[POLICY] {decision} — no interrupt")
+        print(f"\n[POLICY] {decision}")
         print(f"[RESULT] {state.get('result') or 'blocked by policy'}")
-
-    print("\n" + "─" * 60)
-    print("Comparison notes:")
-    print("  Pydantic AI : enforce() in policy.py, ~10 lines, implicit state")
-    print("  LangGraph   : explicit graph, ~40 lines, visible state, resumable")
-    print("  LangGraph adds value when the approval flow has branching logic,")
-    print("  long-running waits, or needs visual debugging via LangSmith.")
 
 
 if __name__ == "__main__":
