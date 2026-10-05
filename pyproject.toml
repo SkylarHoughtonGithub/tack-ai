@@ -24,6 +24,8 @@ dependencies = [
     # Phase 9: durable execution
     "dbos>=2.10.0",
     "temporalio>=1.7.0",
+    "langgraph>=1.2.12",
+    "cedarpy>=4.12.1",
 ]
 
 [project.scripts]

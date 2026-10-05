@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     web_username: str = "admin"
     web_password: str = "changeme"
 
+    # Phase 11 — policy engine selection
+    # "opa"   — all decisions through OPA (default)
+    # "cedar" — tool-authorization through Cedar; routing/budget still through OPA
+    policy_engine: str = "opa"
+
     def available_providers(self) -> list[str]:
         return [
             attr.replace("_api_key", "")
