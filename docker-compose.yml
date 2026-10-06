@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:0.8.7-pg18-trixie
     environment:
       POSTGRES_DB: tack_ai
       POSTGRES_USER: tack_ai
@@ -8,7 +8,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tack_ai"]
@@ -23,7 +23,7 @@ services:
       OPENFGA_DATASTORE_ENGINE: memory
       OPENFGA_HTTP_ADDR: "0.0.0.0:8080"
     ports:
-      - "8080:8080"   # HTTP API
+      - "8081:8080"   # HTTP API (8080 reserved for k3d)
       - "3000:3000"   # Playground UI
     healthcheck:
       test: ["CMD", "/usr/local/bin/openfga", "healthcheck"]

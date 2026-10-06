@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # Phase 6 — RAG and memory
     database_url: str | None = None          # e.g. postgresql://tack_ai:tack_ai@localhost/tack_ai
-    openfga_url: str = "http://localhost:8080"
+    openfga_url: str = "http://localhost:8081"
     openfga_store_id: str | None = None
     openfga_model_id: str | None = None
 

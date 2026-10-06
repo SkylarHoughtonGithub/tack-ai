@@ -1,21 +1,41 @@
 """
-OpenFGA authorization wrapper for RAG retrieval.
+OpenFGA authorization for per-run tool grants.
 
-Authorization model:
-  type user
-  type source
+Model:
+  type run
+  type tool
     relations
-      define viewer: [user]
+      define executor: [run]
 
-A user who has the "viewer" relation on a source can receive chunks from it.
-The setup script (scripts/setup_fga.py) creates the store, writes the model,
-and seeds permission tuples.
+When a tool call requiring approval is approved, a tuple is written granting
+that specific run executor access on that tool. enforce() verifies the grant
+exists before proceeding. This makes approvals auditable and revocable: a grant
+can be deleted mid-run from the approvals page to stop execution even after
+the initial approval.
 """
 
 from __future__ import annotations
 
 from openfga_sdk import ClientConfiguration, OpenFgaClient
-from openfga_sdk.client.models import ClientCheckRequest
+from openfga_sdk.client.models import ClientCheckRequest, ClientTuple, ClientWriteRequest
+
+_client: FGAClient | None = None
+
+
+def get_fga_client() -> FGAClient | None:
+    """Return singleton FGAClient if configured, else None."""
+    global _client
+    if _client is not None:
+        return _client
+    from tack_ai.config import Settings
+    s = Settings()
+    if s.openfga_store_id and s.openfga_model_id:
+        _client = FGAClient(
+            api_url=s.openfga_url,
+            store_id=s.openfga_store_id,
+            model_id=s.openfga_model_id,
+        )
+    return _client
 
 
 class FGAClient:
@@ -26,46 +46,26 @@ class FGAClient:
             authorization_model_id=model_id,
         )
 
-    async def can_view(self, user: str, source_id: str) -> bool:
-        """Return True if `user` has viewer on `source_id`."""
+    async def grant_tool(self, run_id: str, tool_name: str) -> None:
+        """Grant executor on tool_name to run_id (called on approval)."""
         async with OpenFgaClient(self._config) as client:
-            resp = await client.check(
-                ClientCheckRequest(
-                    user=f"user:{user}",
-                    relation="viewer",
-                    object=f"source:{_fga_key(source_id)}",
-                )
-            )
+            await client.write(body=ClientWriteRequest(writes=[
+                ClientTuple(user=f"run:{run_id}", relation="executor", object=f"tool:{tool_name}"),
+            ]))
+
+    async def revoke_tool(self, run_id: str, tool_name: str) -> None:
+        """Revoke executor on tool_name from run_id (called on denial or run cleanup)."""
+        async with OpenFgaClient(self._config) as client:
+            await client.delete_tuples(body=[
+                ClientTuple(user=f"run:{run_id}", relation="executor", object=f"tool:{tool_name}"),
+            ])
+
+    async def can_execute(self, run_id: str, tool_name: str) -> bool:
+        """Return True if run_id holds executor on tool_name."""
+        async with OpenFgaClient(self._config) as client:
+            resp = await client.check(ClientCheckRequest(
+                user=f"run:{run_id}",
+                relation="executor",
+                object=f"tool:{tool_name}",
+            ))
             return bool(resp.allowed)
-
-    async def grant_view(self, user: str, source_id: str) -> None:
-        """Grant viewer on source_id to user.  Idempotent."""
-        from openfga_sdk.client.models import ClientTuple
-        async with OpenFgaClient(self._config) as client:
-            await client.write(
-                body={"writes": [
-                    ClientTuple(
-                        user=f"user:{user}",
-                        relation="viewer",
-                        object=f"source:{_fga_key(source_id)}",
-                    )
-                ]}
-            )
-
-    async def revoke_view(self, user: str, source_id: str) -> None:
-        from openfga_sdk.client.models import ClientTuple
-        async with OpenFgaClient(self._config) as client:
-            await client.delete_tuples(
-                body=[
-                    ClientTuple(
-                        user=f"user:{user}",
-                        relation="viewer",
-                        object=f"source:{_fga_key(source_id)}",
-                    )
-                ]
-            )
-
-
-def _fga_key(source_id: str) -> str:
-    """Sanitize source_id into a valid OpenFGA object ID (no colons/slashes)."""
-    return source_id.replace(":", "_").replace("/", "_").replace(".", "_")

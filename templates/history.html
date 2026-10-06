@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}History — Tack-AI{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-4">
+  <h1 class="font-bold text-lg">Conversation History</h1>
+  <span class="text-xs text-gray-400">{{ sessions | length }} session{{ 's' if sessions | length != 1 else '' }}</span>
+</div>
+
+{% if sessions %}
+  {% for session_id, data in sessions.items() %}
+  <div class="bg-white rounded border mb-5">
+    <div class="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
+      <span class="font-mono text-sm font-medium">{{ session_id }}</span>
+      {% if data.summary %}
+      <span class="text-xs text-gray-400">summarised up to turn {{ data.summary.up_to_turn }}</span>
+      {% endif %}
+    </div>
+
+    {% if data.summary %}
+    <div class="px-4 py-3 border-b bg-yellow-50 text-xs text-yellow-800">
+      <div class="font-medium mb-1 text-yellow-600">Earlier context (summary)</div>
+      {{ data.summary.summary }}
+    </div>
+    {% endif %}
+
+    <div class="divide-y">
+      {% for turn in data.turns %}
+      <div class="px-4 py-3 flex gap-3">
+        <span class="text-xs font-mono w-16 shrink-0 pt-0.5
+          {% if turn.role == 'user' %}text-blue-500{% else %}text-green-600{% endif %}">
+          {{ turn.role }}
+        </span>
+        <div class="text-sm text-gray-700 leading-relaxed flex-1">{{ turn.content }}</div>
+        <span class="text-xs text-gray-300 font-mono shrink-0 pt-0.5 text-right">
+          #{{ turn.turn_index }}<br>
+          {% if turn.created_at %}{{ turn.created_at | string | truncate(16, True, '') }}{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="bg-white rounded border px-5 py-14 text-center text-gray-300 text-sm">
+  No conversation history yet.
+</div>
+{% endif %}
+
+{% endblock %}
