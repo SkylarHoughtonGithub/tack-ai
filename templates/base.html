@@ -10,8 +10,11 @@
   <nav class="bg-gray-900 text-gray-100 px-6 py-3 flex items-center justify-between">
     <div class="flex gap-6 items-center">
       <a href="/" class="font-bold text-white tracking-tight">tack-ai</a>
+      {% if user %}
       <a href="/approvals" class="text-gray-400 hover:text-white text-sm transition-colors">approvals</a>
       <a href="/audit" class="text-gray-400 hover:text-white text-sm transition-colors">audit</a>
+      <a href="/history" class="text-gray-400 hover:text-white text-sm transition-colors">history</a>
+      {% endif %}
     </div>
     {% if user %}
     <div class="text-sm text-gray-400">

@@ -1,9 +1,5 @@
 """
-Retrieval: embed query → pgvector similarity search → OpenFGA permission filter.
-
-Only chunks from sources the requesting user has viewer access to are returned.
-Every call is logged to the audit trail so the record shows which documents
-were considered, which were returned, and which were filtered out.
+Retrieval: embed query → pgvector similarity search → return top results.
 """
 
 from __future__ import annotations
@@ -12,11 +8,10 @@ import psycopg
 from openai import AsyncOpenAI
 from pgvector.psycopg import register_vector_async
 
-from tack_ai.auth import FGAClient
 from tack_ai.ingestion import EMBED_MODEL
 
-TOP_K = 8          # fetch this many before FGA filtering
-RETURN_K = 5       # return at most this many after filtering
+TOP_K = 8
+RETURN_K = 5
 
 
 async def search_documents(
@@ -24,7 +19,6 @@ async def search_documents(
     user: str,
     db_url: str,
     openai_api_key: str,
-    fga: FGAClient,
     *,
     source_id: str | None = None,
 ) -> list[dict]:
@@ -67,27 +61,16 @@ async def search_documents(
                 )
             rows = await cur.fetchall()
 
-    # Filter by FGA permissions.
-    permitted = []
-    filtered_out = []
-    seen_sources: dict[str, bool] = {}
-
-    for row in rows:
-        sid, origin, chunk_idx, content, score = row
-        if sid not in seen_sources:
-            seen_sources[sid] = await fga.can_view(user, sid)
-        if seen_sources[sid]:
-            permitted.append({
-                "source_id": sid,
-                "origin": origin,
-                "chunk_index": chunk_idx,
-                "content": content,
-                "score": round(float(score), 4),
-            })
-        else:
-            filtered_out.append(sid)
-
-    return permitted[:RETURN_K]
+    return [
+        {
+            "source_id": sid,
+            "origin": origin,
+            "chunk_index": chunk_idx,
+            "content": content,
+            "score": round(float(score), 4),
+        }
+        for sid, origin, chunk_idx, content, score in rows
+    ][:RETURN_K]
 
 
 def format_for_prompt(results: list[dict]) -> str:

@@ -56,11 +56,12 @@ class RuleBasedRouter:
 
 
 class LLMRouter:
-    """Uses gpt-4o-mini to classify the task — costs ~$0.0001 per route."""
+    """Classifies tasks using the model configured at router.decision in models.toml."""
 
-    def __init__(self, openai_api_key: str) -> None:
+    def __init__(self, model_str: str, openai_api_key: str) -> None:
+        _, model_name = model_str.split(":", 1)
         model = OpenAIChatModel(
-            "gpt-4o-mini",
+            model_name,
             provider=OpenAIProvider(api_key=openai_api_key),
         )
         self._agent: Agent[None, Route] = Agent(

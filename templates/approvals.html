@@ -15,7 +15,8 @@
       <div class="flex-1 min-w-0">
         <div class="font-bold text-sm mb-1">{{ a.tool_name }}</div>
         <div class="text-xs text-gray-400 mb-3">
-          run:
+          actor: <span class="text-gray-600">{{ a.actor }}</span>
+          &nbsp;·&nbsp;run:
           <a href="/tasks/{{ a.run_id }}" class="text-blue-600 hover:underline font-mono">
             {{ a.run_id[:8] }}
           </a>

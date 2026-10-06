@@ -128,6 +128,16 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
     from tack_ai.audit import append, current_run_id, redact_args
 
     run_id = current_run_id.get()
+
+    # If a prior approval grant exists in FGA for this run/tool, allow without
+    # re-running the approval flow. This enables mid-run revocation: deleting
+    # the FGA tuple from the approvals page will force re-approval on the next call.
+    if run_id and _approval_override.get() is not None:
+        from tack_ai.auth import get_fga_client  # noqa: PLC0415
+        fga = get_fga_client()
+        if fga is not None and await fga.can_execute(run_id, tool_name):
+            return True, "approved (FGA grant)"
+
     decision = await policy_check(tool_name, args, user, run_id=run_id)
     version = await get_policy_version()
     approver: str | None = None
@@ -139,9 +149,9 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
         ok, reason = False, f"policy denied '{tool_name}'"
     elif decision == PolicyDecision.require_approval:
         approved = await request_approval(tool_name, args)
+        approver = user
+        approved_at = datetime.now(timezone.utc)
         if approved:
-            approver = user
-            approved_at = datetime.now(timezone.utc)
             ok, reason = True, "approved by user"
         else:
             ok, reason = False, f"user denied '{tool_name}'"
@@ -149,7 +159,7 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
         ok, reason = False, "unknown policy decision"
 
     if run_id:
-        append(AuditRecord(
+        await append(AuditRecord(
             run_id=run_id,
             actor=user,
             event_type="policy_decision",
