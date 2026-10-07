@@ -14,11 +14,20 @@
       <a href="/approvals" class="text-gray-400 hover:text-white text-sm transition-colors">approvals</a>
       <a href="/audit" class="text-gray-400 hover:text-white text-sm transition-colors">audit</a>
       <a href="/history" class="text-gray-400 hover:text-white text-sm transition-colors">history</a>
+      {% if role == 'admin' %}
+      <a href="/admin/users" class="text-gray-400 hover:text-white text-sm transition-colors">users</a>
+      {% endif %}
       {% endif %}
     </div>
     {% if user %}
-    <div class="text-sm text-gray-400">
+    <div class="text-sm text-gray-400 flex items-center gap-2">
       <span class="text-gray-300">{{ user }}</span>
+      {% if role %}
+      <span class="text-xs px-1.5 py-0.5 rounded
+        {% if role == 'admin' %}bg-gray-700 text-gray-300{% else %}bg-gray-800 text-gray-500{% endif %}">
+        {{ role }}
+      </span>
+      {% endif %}
       &nbsp;·&nbsp;
       <a href="/logout" class="hover:text-white transition-colors">logout</a>
     </div>

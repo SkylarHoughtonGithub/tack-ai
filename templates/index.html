@@ -23,7 +23,8 @@
   </div>
 </div>
 
-<!-- Submit task -->
+<!-- Submit task (admin only) -->
+{% if role == 'admin' %}
 <div class="bg-white rounded border p-5 mb-6">
   <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Submit task</h2>
   <form method="post" action="/tasks">
@@ -38,6 +39,11 @@
     </div>
   </form>
 </div>
+{% else %}
+<div class="bg-gray-50 border border-gray-200 rounded p-4 mb-6 text-sm text-gray-400">
+  You are logged in as a <strong class="text-gray-600">viewer</strong> — task submission is restricted to admin accounts.
+</div>
+{% endif %}
 
 <!-- Routing tier mix -->
 {% if stats.tier_counts %}

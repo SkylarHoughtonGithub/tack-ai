@@ -14,7 +14,7 @@ import psycopg
 from openai import AsyncOpenAI
 from pgvector.psycopg import register_vector_async
 
-from tack_ai.sources import DocumentMeta, DocumentSource
+from tack_ai.sources import DocumentSource
 
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIMS = 1536

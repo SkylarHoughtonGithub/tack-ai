@@ -8,6 +8,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.130.0",
+    "bcrypt>=4.2.0",
     "beautifulsoup4>=4.15.0",
     "logfire[pydantic-ai]>=5.1.1",
     "openfga-sdk>=0.10.5",
@@ -30,7 +31,39 @@ dependencies = [
 
 [project.scripts]
 tack-ai = "tack_ai:main"
+tack-ai-web = "tack_ai.web:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.15.0",
+    "bandit[toml]>=1.8.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.27.0",
+    "playwright>=1.49.0",
+    "pytest-playwright>=0.6.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.19,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = ["E501", "B905"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.bandit]
+skips = ["B101"]  # allow assert in tests

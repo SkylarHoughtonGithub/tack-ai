@@ -105,13 +105,13 @@ async def request_approval(tool_name: str, args: dict) -> bool:
 
     if durable_mode.get():
         # Lazy import to avoid circular dependency at module load time.
-        from tack_ai.durable import wait_for_db_approval
         from tack_ai.audit import current_run_id
+        from tack_ai.durable import wait_for_db_approval
         run_id = current_run_id.get()
         return await wait_for_db_approval(run_id, tool_name, args)
 
     print(f"\n{'─'*50}")
-    print(f"  APPROVAL REQUIRED")
+    print("  APPROVAL REQUIRED")
     print(f"  Tool: {tool_name}")
     for k, v in args.items():
         print(f"  {k}: {v}")

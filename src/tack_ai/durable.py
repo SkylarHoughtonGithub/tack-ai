@@ -74,7 +74,8 @@ def _init_dbos() -> None:
 
     # Import here so that importing durable.py at the top level never triggers
     # agent.py's module-level provider checks.
-    from tack_ai.agent import agent as _base_agent, _CACHE_SETTINGS  # noqa: PLC0415
+    from tack_ai.agent import _CACHE_SETTINGS
+    from tack_ai.agent import agent as _base_agent  # noqa: PLC0415
 
     # DBOS uses its own system tables in the same Postgres instance.
     config = DBOSConfig(
@@ -103,7 +104,7 @@ def _init_dbos() -> None:
           the Anthropic API), so they are free and instant on recovery.
         """
         from tack_ai.audit import current_run_id  # noqa: PLC0415
-        from tack_ai.policy import durable_mode   # noqa: PLC0415
+        from tack_ai.policy import durable_mode  # noqa: PLC0415
 
         current_run_id.set(run_id)
         durable_mode.set(True)
@@ -154,7 +155,7 @@ async def wait_for_db_approval(
         await conn.commit()
 
     print(f"\n{'─'*54}")
-    print(f"  DURABLE APPROVAL REQUIRED")
+    print("  DURABLE APPROVAL REQUIRED")
     print(f"  Tool:        {tool_name}")
     print(f"  Approval ID: {approval_id}")
     print(f"  Run ID:      {run_id}")
@@ -259,7 +260,7 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     print(f"\nQuestion: {question}")
     print(f"Workflow: {wf_id}  (restart with --workflow-id {run_id})")
     print(f"Route:    {route.tier.value} | {route.reason}")
-    print(f"Durable:  yes (DBOS → Postgres)")
+    print("Durable:  yes (DBOS → Postgres)")
 
     append(AuditRecord(
         run_id=run_id,
@@ -279,7 +280,7 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
 
     result_dict: dict = await handle.get_result()
 
-    print(f"\n=== Answer ===")
+    print("\n=== Answer ===")
     print(f"Summary:    {result_dict['summary']}")
     print(f"Sources:    {result_dict.get('sources', [])}")
     print(f"Confidence: {result_dict.get('confidence', 0):.2f}")
@@ -294,7 +295,7 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     ))
 
     ok, msg = verify_chain()
-    print(f"\n=== Audit ===")
+    print("\n=== Audit ===")
     print(f"Chain: {'✓' if ok else '✗'}  {msg}")
     print(
         f"Replay: uv run python -c "
