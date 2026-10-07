@@ -62,7 +62,7 @@ if _TEMPORAL_AVAILABLE:
     @activity.defn
     async def routing_activity(question: str) -> dict:
         """Route the question to a model tier.  Runs once; result is checkpointed."""
-        from tack_ai.router import RuleBasedRouter, LLMRouter
+        from tack_ai.router import LLMRouter, RuleBasedRouter
 
         if settings.router_type == "llm" and settings.openai_api_key:
             try:
@@ -82,7 +82,7 @@ if _TEMPORAL_AVAILABLE:
         crashes mid-activity, Temporal retries only the failed activity — previously
         completed model requests are not re-run.
         """
-        from tack_ai.agent import agent, _CACHE_SETTINGS
+        from tack_ai.agent import _CACHE_SETTINGS, agent
         from tack_ai.audit import current_run_id
 
         current_run_id.set(run_id)

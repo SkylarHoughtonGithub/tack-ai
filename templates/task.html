@@ -5,9 +5,15 @@
 <div class="flex items-center gap-3 mb-4">
   <a href="/" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">← back</a>
   <h1 class="font-bold">Task <span class="font-mono text-gray-400">{{ run_id[:8] }}</span></h1>
-  <span id="status-badge" class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">running</span>
+  <span id="status-badge" class="text-xs px-2 py-0.5 rounded
+    {% if status == 'waiting_follow_up' %}bg-yellow-100 text-yellow-700
+    {% elif status in ('closed', 'done') %}bg-green-100 text-green-700
+    {% elif status in ('failed', 'cancelled') %}bg-red-100 text-red-700
+    {% else %}bg-blue-100 text-blue-700{% endif %}">
+    {% if status == 'waiting_follow_up' %}waiting{% elif status == 'closed' %}closed{% else %}{{ status }}{% endif %}
+  </span>
   {% if status == 'running' %}
-  <form method="post" action="/tasks/{{ run_id }}/cancel" id="cancel-form">
+  <form method="post" action="/tasks/{{ run_id }}/cancel" id="cancel-form" class="inline">
     <button type="submit"
             class="text-xs px-3 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
       Stop
@@ -16,18 +22,38 @@
   {% endif %}
 </div>
 
+<!-- Completed turns (thread history) -->
+{% if completed_turns and completed_turns|length > 1 %}
+<div class="space-y-3 mb-4">
+  {% for turn in completed_turns[:-1] %}
+  <div class="bg-white rounded border p-4 opacity-75">
+    <div class="text-gray-400 text-xs mb-1">Turn {{ loop.index }}</div>
+    <div class="text-sm font-medium text-gray-700 mb-2">{{ turn.question }}</div>
+    <div class="text-xs text-gray-500 border-t pt-2 mt-2">{{ turn.answer or "—" }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Current question -->
 <div class="bg-white rounded border p-4 mb-4">
-  <div class="text-gray-400 text-xs mb-1">Question</div>
+  <div class="text-gray-400 text-xs mb-1">
+    {% if completed_turns %}Turn {{ completed_turns|length }}{% else %}Question{% endif %}
+  </div>
   <div class="text-sm">{{ question }}</div>
 </div>
 
-<!-- Event log -->
+<!-- Event log (reasoning trace + live events) -->
 <div id="event-log"
      class="bg-gray-900 text-gray-100 rounded p-4 font-mono text-sm space-y-0.5 min-h-40 max-h-96 overflow-y-auto">
+  {% if status not in ('running', 'waiting_follow_up') %}
+  <span class="text-gray-500">(task complete)</span>
+  {% else %}
   <span class="text-gray-500">Connecting…</span>
+  {% endif %}
 </div>
 
-<!-- Answer box (hidden until done) -->
+<!-- Answer box (hidden until first answer) -->
 <div id="answer-box" class="hidden bg-white rounded border p-5 mt-4">
   <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Answer</h2>
   <p id="answer-summary" class="text-sm leading-relaxed mb-3"></p>
@@ -39,7 +65,7 @@
   </div>
 </div>
 
-<!-- Approval banner (hidden until needed) -->
+<!-- Approval banner -->
 <div id="approval-banner" class="hidden bg-orange-50 border border-orange-200 rounded p-5 mt-4">
   <h3 class="font-bold text-orange-800 text-sm mb-2">Approval required</h3>
   <div id="approval-details" class="text-xs text-orange-700 font-mono mb-4 whitespace-pre-wrap"></div>
@@ -55,17 +81,64 @@
   </div>
 </div>
 
+<!-- Follow-up input (shown when waiting_follow_up) -->
+{% if role == 'admin' %}
+<div id="follow-up-box" class="{% if status != 'waiting_follow_up' %}hidden{% endif %} bg-white rounded border p-5 mt-4">
+  <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Follow-up</h2>
+  <form method="post" action="/tasks/{{ run_id }}/message" id="follow-up-form">
+    <div class="flex gap-3">
+      <input name="question" type="text" id="follow-up-input"
+             placeholder="Ask a follow-up question…"
+             class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+      <button type="submit"
+              class="bg-gray-900 text-white px-5 py-2 rounded text-sm hover:bg-gray-700 transition-colors">
+        Send
+      </button>
+    </div>
+  </form>
+  <form method="post" action="/tasks/{{ run_id }}/close" class="mt-3">
+    <button type="submit"
+            class="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+      End conversation
+    </button>
+  </form>
+</div>
+{% endif %}
+
 <script>
   const runId = {{ run_id | tojson }};
+  const isAdmin = {{ 'true' if role == 'admin' else 'false' }};
   const log = document.getElementById("event-log");
   let currentApprovalId = null;
-  let taskDone = {{ 'true' if status != 'running' else 'false' }};
+  const initialStatus = {{ status | tojson }};
+  const activeStatuses = new Set(["running", "waiting_follow_up"]);
+  let taskActive = activeStatuses.has(initialStatus);
 
   function logLine(text, cls) {
+    // Remove "Connecting…" placeholder on first real event
+    const placeholder = log.querySelector("span.text-gray-500");
+    if (placeholder) placeholder.remove();
     const el = document.createElement("div");
     if (cls) el.className = cls;
     el.textContent = text;
     log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function logReasoning(content) {
+    const placeholder = log.querySelector("span.text-gray-500");
+    if (placeholder) placeholder.remove();
+    const wrap = document.createElement("details");
+    wrap.className = "my-0.5";
+    const summary = document.createElement("summary");
+    summary.className = "cursor-pointer text-purple-300 text-xs select-none";
+    summary.textContent = "▶ reasoning trace";
+    const pre = document.createElement("pre");
+    pre.className = "text-gray-400 text-xs whitespace-pre-wrap pl-3 mt-1 max-h-40 overflow-y-auto";
+    pre.textContent = content;
+    wrap.appendChild(summary);
+    wrap.appendChild(pre);
+    log.appendChild(wrap);
     log.scrollTop = log.scrollHeight;
   }
 
@@ -86,77 +159,110 @@
     });
   }
 
-  log.innerHTML = "";
+  if (!taskActive) {
+    // Task already finished — nothing to stream
+  } else {
+    log.innerHTML = "";
+    const es = new EventSource("/tasks/" + runId + "/stream");
 
-  const es = new EventSource("/tasks/" + runId + "/stream");
+    es.onmessage = function(e) {
+      const d = JSON.parse(e.data);
 
-  es.onmessage = function(e) {
-    const d = JSON.parse(e.data);
+      if (d.type === "turn_start") {
+        if (d.turn_index > 0) {
+          logLine("─── turn " + (d.turn_index + 1) + ": " + d.question, "text-gray-500 mt-2");
+        }
 
-    if (d.type === "status") {
-      logLine("» " + d.message, "text-gray-400");
+      } else if (d.type === "turn_end") {
+        // No UI action needed; answer box already shown
 
-    } else if (d.type === "warning") {
-      d.message.split("\n").forEach(function(line) {
-        logLine("⚠ " + line, "text-orange-300");
-      });
+      } else if (d.type === "status") {
+        logLine("» " + d.message, "text-gray-400");
 
-    } else if (d.type === "routing") {
-      logLine(
-        "route: " + d.tier + " / " + d.effort + " — " + d.reason,
-        "text-yellow-300"
-      );
+      } else if (d.type === "warning") {
+        d.message.split("\n").forEach(function(line) {
+          logLine("⚠ " + line, "text-orange-300");
+        });
 
-    } else if (d.type === "answer") {
-      document.getElementById("approval-banner").classList.add("hidden");
-      currentApprovalId = null;
-      document.getElementById("answer-summary").textContent = d.summary;
-      document.getElementById("answer-sources").textContent =
-        (d.sources && d.sources.length) ? d.sources.join(", ") : "none";
-      document.getElementById("answer-confidence").textContent =
-        Math.round((d.confidence || 0) * 100) + "%";
-      document.getElementById("answer-cost").textContent =
-        "$" + (d.cost_usd || 0).toFixed(5);
-      document.getElementById("answer-tokens").textContent =
-        "in=" + (d.input_tokens || 0) + " out=" + (d.output_tokens || 0);
-      document.getElementById("answer-box").classList.remove("hidden");
-      logLine("✓ answer ready", "text-green-400");
+      } else if (d.type === "routing") {
+        logLine(
+          "route: " + d.tier + " / " + d.effort + " — " + d.reason,
+          "text-yellow-300"
+        );
 
-    } else if (d.type === "approval_required") {
-      if (!taskDone) {
-        currentApprovalId = d.approval_id;
-        document.getElementById("approval-details").textContent =
-          "actor: " + d.actor + "\ntool:  " + d.tool_name + "\nargs: " + JSON.stringify(d.args, null, 2);
-        document.getElementById("approval-banner").classList.remove("hidden");
+      } else if (d.type === "tool_call") {
+        logLine("→ " + d.tool_name + "(" + d.args + ")", "text-cyan-400 text-xs");
+
+      } else if (d.type === "tool_result") {
+        logLine("← " + d.tool_name + ": " + d.content, "text-cyan-600 text-xs");
+
+      } else if (d.type === "reasoning") {
+        logReasoning(d.content);
+
+      } else if (d.type === "answer") {
+        document.getElementById("approval-banner").classList.add("hidden");
+        currentApprovalId = null;
+        document.getElementById("answer-summary").textContent = d.summary;
+        document.getElementById("answer-sources").textContent =
+          (d.sources && d.sources.length) ? d.sources.join(", ") : "none";
+        document.getElementById("answer-confidence").textContent =
+          Math.round((d.confidence || 0) * 100) + "%";
+        document.getElementById("answer-cost").textContent =
+          "$" + (d.cost_usd || 0).toFixed(5);
+        document.getElementById("answer-tokens").textContent =
+          "in=" + (d.input_tokens || 0) + " out=" + (d.output_tokens || 0);
+        document.getElementById("answer-box").classList.remove("hidden");
+        logLine("✓ answer ready", "text-green-400");
+        setStatus("waiting", "bg-yellow-100 text-yellow-700");
+
+        // Show follow-up input for admins
+        if (isAdmin) {
+          const followUpBox = document.getElementById("follow-up-box");
+          if (followUpBox) {
+            followUpBox.classList.remove("hidden");
+            const input = document.getElementById("follow-up-input");
+            if (input) input.focus();
+          }
+        }
+
+      } else if (d.type === "approval_required") {
+        if (taskActive && isAdmin) {
+          currentApprovalId = d.approval_id;
+          document.getElementById("approval-details").textContent =
+            "actor: " + d.actor + "\ntool:  " + d.tool_name + "\nargs: " + JSON.stringify(d.args, null, 2);
+          document.getElementById("approval-banner").classList.remove("hidden");
+        }
+        logLine("⚠ approval required: " + d.tool_name, "text-orange-300");
+
+      } else if (d.type === "error") {
+        logLine("✗ " + d.message, "text-red-400");
+        setStatus("failed", "bg-red-100 text-red-700");
+
+      } else if (d.type === "done") {
+        taskActive = false;
+        document.getElementById("approval-banner").classList.add("hidden");
+        currentApprovalId = null;
+        const cancelForm = document.getElementById("cancel-form");
+        if (cancelForm) cancelForm.remove();
+        const followUpBox = document.getElementById("follow-up-box");
+        if (followUpBox) followUpBox.classList.add("hidden");
+        const badge = document.getElementById("status-badge");
+        if (badge.textContent !== "failed") {
+          setStatus("closed", "bg-green-100 text-green-700");
+        }
+        es.close();
       }
-      logLine("⚠ approval required: " + d.tool_name, "text-orange-300");
+    };
 
-    } else if (d.type === "error") {
-      logLine("✗ " + d.message, "text-red-400");
-      setStatus("failed", "bg-red-100 text-red-700");
-      es.close();
-
-    } else if (d.type === "done") {
-      taskDone = true;
-      document.getElementById("approval-banner").classList.add("hidden");
-      currentApprovalId = null;
-      const cancelForm = document.getElementById("cancel-form");
-      if (cancelForm) cancelForm.remove();
-      const badge = document.getElementById("status-badge");
-      if (badge.textContent !== "failed") {
-        setStatus("done", "bg-green-100 text-green-700");
+    es.onerror = function() {
+      if (document.getElementById("status-badge").textContent === "running" ||
+          document.getElementById("status-badge").textContent === "waiting") {
+        logLine("connection lost", "text-red-400");
+        setStatus("failed", "bg-red-100 text-red-700");
       }
       es.close();
-    }
-  };
-
-  es.onerror = function() {
-    if (document.getElementById("status-badge").textContent === "running") {
-      logLine("connection lost", "text-red-400");
-      setStatus("failed", "bg-red-100 text-red-700");
-    }
-    es.close();
-  };
+    };
+  }
 </script>
 
 {% endblock %}

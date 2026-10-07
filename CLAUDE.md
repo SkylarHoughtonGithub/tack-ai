@@ -15,13 +15,25 @@ opa run --server --addr :8181 policies/
 # Run the agent CLI (in a separate terminal)
 uv run python -m tack_ai.agent
 
-# Start the web console (Phase 10)
-uv run uvicorn tack_ai.web:app --reload
+# Start the web console
+uv run tack-ai-web          # preferred — proper Ctrl+C handling
 # then open http://localhost:8000  (default credentials: admin / changeme)
 # set WEB_USERNAME and WEB_PASSWORD in .env to change them
+
+# Development / CI
+uv sync --all-groups         # install runtime + dev deps
+uv run pytest tests/ -v --ignore=tests/e2e   # unit tests (no external services needed)
+uv run ruff check src/       # lint
+uv run mypy src/tack_ai/     # type-check
+uv run bandit -r src/tack_ai/ -ll  # security scan
 ```
 
 All Python commands use `uv run` — no need to activate the venv manually.
+
+**Note on Ctrl+C:** Use `uv run tack-ai-web` instead of `uv run uvicorn ... --reload`.
+The `uv run tack-ai-web` entry point calls uvicorn programmatically, which delivers
+SIGINT correctly. The `--reload` flag with `uv run uvicorn` wraps uvicorn in an extra
+subprocess layer that can swallow Ctrl+C.
 
 ## Architecture decisions
 
@@ -44,4 +56,9 @@ All Python commands use `uv run` — no need to activate the venv manually.
 
 ## Phase status
 
-**Phases 0–10 complete.** Next: Phase 11 — comparisons (LangGraph, Cedar, Claude Agent SDK).
+**Phases 0–11 complete. P1 enhancements in progress (branch: p1):**
+- Ctrl+C fix: `tack-ai-web` entry point for proper signal handling
+- Reasoning traces: tool calls, results, and thinking surfaced in task timeline
+- CI pipeline: GitHub Actions with ruff, mypy, bandit, pytest, Playwright E2E
+- Multi-turn chat: follow-up messages within a single task thread
+- User management: bcrypt-hashed DB accounts, admin/viewer roles, `/admin/users`

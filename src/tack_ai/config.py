@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 _PROVIDER_KEY_INFO = [
     ("anthropic_api_key", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
     ("openai_api_key",    "OPENAI_API_KEY",    "https://platform.openai.com/api-keys"),
@@ -32,6 +31,9 @@ class Settings(BaseSettings):
     # Phase 10 — web console
     web_username: str = "admin"
     web_password: str = "changeme"
+
+    # Optional: set BRAVE_API_KEY to enable real web search
+    brave_api_key: str | None = None
 
     # Phase 11 — policy engine selection
     # "opa"   — all decisions through OPA (default)
