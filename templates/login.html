@@ -1,39 +1,44 @@
 {% extends "base.html" %}
 {% block title %}Login — Tack-AI{% endblock %}
 {% block content %}
-<div class="max-w-sm mx-auto mt-20">
-  <h1 class="text-xl font-bold mb-6">Tack-AI Console</h1>
+<div class="max-w-sm mx-auto mt-14">
+  <div class="flex flex-col items-center mb-8">
+    <img id="login-logo" src="/static/img/tack-ai-logo-dark.png" alt="Tack-AI" class="h-24 w-24 mb-3 rounded-lg">
+    <h1 class="text-xl font-bold text-[var(--brand)] tracking-widest">TACK-AI</h1>
+    <p class="text-xs text-[var(--tx-4)] mt-1">AI Agent Console</p>
+  </div>
+
   {% if error %}
-  <div class="bg-red-50 border border-red-200 text-red-700 rounded px-4 py-2 text-sm mb-4">
+  <div class="bg-red-900/20 border border-red-800/60 text-red-400 rounded px-4 py-2 text-sm mb-4">
     {{ error }}
   </div>
   {% endif %}
 
   {% if oidc_enabled %}
   <a href="/auth/login"
-     class="block w-full text-center border border-gray-300 rounded py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors mb-4">
+     class="oidc-btn block w-full text-center border brand-border-dim rounded py-2 text-sm text-[var(--brand)] transition-colors mb-4">
     Sign in with {{ oidc_provider | capitalize }}
   </a>
   <div class="flex items-center gap-3 mb-4">
-    <hr class="flex-1 border-gray-200">
-    <span class="text-xs text-gray-400">or</span>
-    <hr class="flex-1 border-gray-200">
+    <hr class="flex-1 border-[var(--border)]">
+    <span class="text-xs text-[var(--tx-4)]">or</span>
+    <hr class="flex-1 border-[var(--border)]">
   </div>
   {% endif %}
 
-  <form method="post" action="/login" class="bg-white rounded border p-6 space-y-4">
+  <form method="post" action="/login" class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-6 space-y-4">
     <div>
-      <label class="block text-xs text-gray-500 mb-1">Username</label>
+      <label class="block text-xs text-[var(--tx-4)] mb-1">Username</label>
       <input name="username" type="text" autofocus
-             class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+             class="w-full bg-[var(--bg-input)] border border-[var(--border-in)] rounded px-3 py-2 text-sm text-[var(--tx-1)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] focus:border-[var(--brand)]">
     </div>
     <div>
-      <label class="block text-xs text-gray-500 mb-1">Password</label>
+      <label class="block text-xs text-[var(--tx-4)] mb-1">Password</label>
       <input name="password" type="password"
-             class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+             class="w-full bg-[var(--bg-input)] border border-[var(--border-in)] rounded px-3 py-2 text-sm text-[var(--tx-1)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] focus:border-[var(--brand)]">
     </div>
     <button type="submit"
-            class="w-full bg-gray-900 text-white py-2 rounded text-sm hover:bg-gray-700 transition-colors">
+            class="w-full bg-[var(--brand)] text-black py-2 rounded text-sm font-bold hover:bg-[var(--brand-h)] transition-colors">
       Sign in
     </button>
   </form>

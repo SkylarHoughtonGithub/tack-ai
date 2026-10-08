@@ -7,42 +7,42 @@
 </div>
 
 {% if error %}
-<div class="bg-red-50 border border-red-200 text-red-700 rounded px-4 py-2 text-sm mb-4">
+<div class="bg-red-900/20 border border-red-700/60 text-red-400 rounded px-4 py-2 text-sm mb-4">
   {{ error }}
 </div>
 {% endif %}
 
 {% if not db_available %}
-<div class="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded px-4 py-3 text-sm mb-6">
+<div class="bg-yellow-900/20 border border-yellow-700/60 text-yellow-400 rounded px-4 py-3 text-sm mb-6">
   DATABASE_URL is not set — user management requires Postgres. Only the env-var admin account is available.
 </div>
 {% endif %}
 
 <!-- Create user form -->
 {% if db_available %}
-<div class="bg-white rounded border p-5 mb-6">
-  <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Create user</h2>
+<div class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-5 mb-6">
+  <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide mb-4">Create user</h2>
   <form method="post" action="/admin/users" class="flex gap-3 items-end flex-wrap">
     <div>
-      <label class="block text-xs text-gray-500 mb-1">Username</label>
+      <label class="block text-xs text-[var(--tx-4)] mb-1">Username</label>
       <input name="username" type="text" required
-             class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+             class="bg-[var(--bg-input)] border border-[var(--border-in)] rounded px-3 py-2 text-sm text-[var(--tx-1)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)]">
     </div>
     <div>
-      <label class="block text-xs text-gray-500 mb-1">Password</label>
+      <label class="block text-xs text-[var(--tx-4)] mb-1">Password</label>
       <input name="password" type="password" required
-             class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+             class="bg-[var(--bg-input)] border border-[var(--border-in)] rounded px-3 py-2 text-sm text-[var(--tx-1)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)]">
     </div>
     <div>
-      <label class="block text-xs text-gray-500 mb-1">Role</label>
+      <label class="block text-xs text-[var(--tx-4)] mb-1">Role</label>
       <select name="role"
-              class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+              class="bg-[var(--bg-input)] border border-[var(--border-in)] rounded px-3 py-2 text-sm text-[var(--tx-1)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)]">
         <option value="viewer">viewer</option>
         <option value="admin">admin</option>
       </select>
     </div>
     <button type="submit"
-            class="bg-gray-900 text-white px-5 py-2 rounded text-sm hover:bg-gray-700 transition-colors">
+            class="bg-[var(--brand)] text-black px-5 py-2 rounded text-sm font-bold hover:bg-[var(--brand-h)] transition-colors">
       Create
     </button>
   </form>
@@ -50,13 +50,13 @@
 {% endif %}
 
 <!-- User list -->
-<div class="bg-white rounded border">
-  <div class="px-5 py-3 border-b">
-    <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Accounts</h2>
+<div class="bg-[var(--bg-card)] rounded border border-[var(--border)]">
+  <div class="px-5 py-3 border-b border-[var(--border)]">
+    <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide">Accounts</h2>
   </div>
   {% if users %}
   <table class="w-full text-sm">
-    <thead class="bg-gray-50 text-gray-400 text-xs">
+    <thead class="bg-[var(--bg-page)] text-[var(--tx-4)] text-xs">
       <tr>
         <th class="px-5 py-2 text-left font-medium">Username</th>
         <th class="px-5 py-2 text-left font-medium">Role</th>
@@ -66,20 +66,20 @@
     </thead>
     <tbody>
       {% for u in users %}
-      <tr class="border-t hover:bg-gray-50 transition-colors">
-        <td class="px-5 py-3 font-mono text-sm">
+      <tr class="border-t border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors">
+        <td class="px-5 py-3 font-mono text-sm text-[var(--tx-1)]">
           {{ u.username }}
           {% if u.get('source') == 'env' %}
-          <span class="text-xs text-gray-400 ml-1">(env)</span>
+          <span class="text-xs text-[var(--tx-4)] ml-1">(env)</span>
           {% endif %}
         </td>
         <td class="px-5 py-3">
-          <span class="text-xs px-2 py-0.5 rounded
-            {% if u.role == 'admin' %}bg-gray-200 text-gray-700{% else %}bg-gray-100 text-gray-500{% endif %}">
+          <span class="text-xs px-2 py-0.5 rounded border
+            {% if u.role == 'admin' %}brand-border-dim text-[var(--brand)]{% else %}border-[var(--border-in)] text-[var(--tx-4)]{% endif %}">
             {{ u.role }}
           </span>
         </td>
-        <td class="px-5 py-3 text-gray-400 text-xs">
+        <td class="px-5 py-3 text-[var(--tx-4)] text-xs">
           {% if u.get('created_at') %}{{ u.created_at }}{% else %}—{% endif %}
         </td>
         <td class="px-5 py-3 text-right">
@@ -87,7 +87,7 @@
           <form method="post" action="/admin/users/{{ u.username }}/delete"
                 onsubmit="return confirm('Delete {{ u.username }}?')">
             <button type="submit"
-                    class="text-xs text-red-500 hover:text-red-700 transition-colors">
+                    class="text-xs text-red-500 hover:text-red-400 transition-colors">
               delete
             </button>
           </form>
@@ -98,7 +98,7 @@
     </tbody>
   </table>
   {% else %}
-  <div class="px-5 py-8 text-center text-gray-300 text-sm">No users found.</div>
+  <div class="px-5 py-8 text-center text-[var(--tx-4)] text-sm">No users found.</div>
   {% endif %}
 </div>
 

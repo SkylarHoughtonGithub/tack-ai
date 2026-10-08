@@ -4,35 +4,35 @@
 
 <div class="flex items-center justify-between mb-4">
   <h1 class="font-bold text-lg">Conversation History</h1>
-  <span class="text-xs text-gray-400">{{ sessions | length }} session{{ 's' if sessions | length != 1 else '' }}</span>
+  <span class="text-xs text-[var(--tx-4)]">{{ sessions | length }} session{{ 's' if sessions | length != 1 else '' }}</span>
 </div>
 
 {% if sessions %}
   {% for session_id, data in sessions.items() %}
-  <div class="bg-white rounded border mb-5">
-    <div class="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
-      <span class="font-mono text-sm font-medium">{{ session_id }}</span>
+  <div class="bg-[var(--bg-card)] rounded border border-[var(--border)] mb-5">
+    <div class="px-4 py-2 bg-[var(--bg-page)] border-b border-[var(--border)] flex items-center justify-between">
+      <span class="font-mono text-sm font-medium text-[var(--tx-2)]">{{ session_id }}</span>
       {% if data.summary %}
-      <span class="text-xs text-gray-400">summarised up to turn {{ data.summary.up_to_turn }}</span>
+      <span class="text-xs text-[var(--tx-4)]">summarised up to turn {{ data.summary.up_to_turn }}</span>
       {% endif %}
     </div>
 
     {% if data.summary %}
-    <div class="px-4 py-3 border-b bg-yellow-50 text-xs text-yellow-800">
-      <div class="font-medium mb-1 text-yellow-600">Earlier context (summary)</div>
+    <div class="px-4 py-3 border-b border-[var(--border)] bg-yellow-900/10 text-xs text-yellow-400">
+      <div class="font-medium mb-1 text-yellow-500">Earlier context (summary)</div>
       {{ data.summary.summary }}
     </div>
     {% endif %}
 
-    <div class="divide-y">
+    <div class="divide-y divide-[var(--border)]">
       {% for turn in data.turns %}
       <div class="px-4 py-3 flex gap-3">
         <span class="text-xs font-mono w-16 shrink-0 pt-0.5
-          {% if turn.role == 'user' %}text-blue-500{% else %}text-green-600{% endif %}">
+          {% if turn.role == 'user' %}text-blue-400{% else %}text-[var(--brand)]{% endif %}">
           {{ turn.role }}
         </span>
-        <div class="text-sm text-gray-700 leading-relaxed flex-1">{{ turn.content }}</div>
-        <span class="text-xs text-gray-300 font-mono shrink-0 pt-0.5 text-right">
+        <div class="text-sm text-[var(--tx-2)] leading-relaxed flex-1">{{ turn.content }}</div>
+        <span class="text-xs text-[var(--tx-4)] font-mono shrink-0 pt-0.5 text-right">
           #{{ turn.turn_index }}<br>
           {% if turn.created_at %}{{ turn.created_at | string | truncate(16, True, '') }}{% endif %}
         </span>
@@ -42,7 +42,7 @@
   </div>
   {% endfor %}
 {% else %}
-<div class="bg-white rounded border px-5 py-14 text-center text-gray-300 text-sm">
+<div class="bg-[var(--bg-card)] rounded border border-[var(--border)] px-5 py-14 text-center text-[var(--tx-4)] text-sm">
   No conversation history yet.
 </div>
 {% endif %}
