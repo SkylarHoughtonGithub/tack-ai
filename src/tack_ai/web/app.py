@@ -105,7 +105,7 @@ async def _on_403(request: Request, exc: HTTPException) -> Response:
 def _tojson(v: object, indent: int | None = None) -> Markup:
     s = json.dumps(v, indent=indent)
     s = s.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
-    return Markup(s)
+    return Markup(s)  # nosec B704 — s is json.dumps output with HTML chars escaped above
 
 
 templates.env.filters["tojson"] = _tojson
@@ -1205,4 +1205,4 @@ def main() -> None:
     """
     import uvicorn  # noqa: PLC0415
 
-    uvicorn.run("tack_ai.web:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("tack_ai.web:app", host="0.0.0.0", port=8000, reload=True)  # nosec B104

@@ -11,6 +11,7 @@ Run (SSE, for programmatic clients):
 
 from __future__ import annotations
 
+import os
 import sys
 
 from mcp.server.mcpserver import MCPServer
@@ -59,7 +60,8 @@ async def draft_email(to: str, subject: str, body: str) -> str:
 
 def main() -> None:
     if "--sse" in sys.argv:
-        mcp.run(transport="sse", host="0.0.0.0", port=8083)
+        host = os.environ.get("MCP_HOST", "127.0.0.1")
+        mcp.run(transport="sse", host=host, port=8083)
     else:
         mcp.run()
 

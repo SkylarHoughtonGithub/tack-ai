@@ -188,7 +188,7 @@ def _run_in_docker(code: str, language: str) -> str:
                     "none",
                     "--read-only",
                     "--tmpfs",
-                    "/tmp:size=64m",
+                    "/tmp:size=64m",  # nosec B108 — mount inside container, not host tmp
                     "--memory",
                     "128m",
                     "--cpus",

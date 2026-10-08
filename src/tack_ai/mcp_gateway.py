@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import os
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -119,6 +120,7 @@ gateway = MCPServer("tack-ai-gateway", lifespan=_lifespan)
 
 if __name__ == "__main__":
     try:
-        gateway.run(transport="sse", host="0.0.0.0", port=GATEWAY_PORT)
+        gateway_host = os.environ.get("MCP_HOST", "127.0.0.1")
+        gateway.run(transport="sse", host=gateway_host, port=GATEWAY_PORT)
     except KeyboardInterrupt:
         pass

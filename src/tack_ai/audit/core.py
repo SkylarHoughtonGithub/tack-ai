@@ -6,6 +6,7 @@ import re
 from contextvars import ContextVar
 
 import psycopg
+from psycopg import sql as pgsql
 from psycopg.rows import dict_row
 
 from tack_ai.core.models import AuditRecord
@@ -175,26 +176,32 @@ async def query_records(
     try:
         async with await psycopg.AsyncConnection.connect(url, connect_timeout=5) as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
-                clauses: list[str] = []
+                clauses: list[pgsql.Composable] = []
                 params: list = []
                 if run_id:
-                    clauses.append("run_id LIKE %s")
+                    clauses.append(pgsql.SQL("run_id LIKE %s"))
                     params.append(f"{run_id}%")
                 if actor:
-                    clauses.append("actor = %s")
+                    clauses.append(pgsql.SQL("actor = %s"))
                     params.append(actor)
                 if tool:
-                    clauses.append("tool_name = %s")
+                    clauses.append(pgsql.SQL("tool_name = %s"))
                     params.append(tool)
-                where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+                where = (
+                    pgsql.SQL("WHERE ") + pgsql.SQL(" AND ").join(clauses)
+                    if clauses else pgsql.SQL("")
+                )
 
                 await cur.execute(
-                    f"SELECT * FROM audit_log {where} ORDER BY id DESC LIMIT %s",
+                    pgsql.SQL("SELECT * FROM audit_log {} ORDER BY id DESC LIMIT %s").format(where),
                     params + [limit],
                 )
                 records = [dict(r) for r in await cur.fetchall()]
 
-                await cur.execute(f"SELECT COUNT(*) AS cnt FROM audit_log {where}", params)
+                await cur.execute(
+                    pgsql.SQL("SELECT COUNT(*) AS cnt FROM audit_log {}").format(where),
+                    params,
+                )
                 row = await cur.fetchone()
                 total = row["cnt"] if row else 0
         return records, total
