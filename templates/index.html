@@ -2,110 +2,60 @@
 {% block title %}Tack-AI Console{% endblock %}
 {% block content %}
 
-<!-- Stats strip -->
-<div class="grid grid-cols-3 gap-4 mb-6">
-  <div class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-4">
-    <div class="text-[var(--tx-4)] text-xs mb-1">Cost (this session)</div>
-    <div class="text-2xl font-bold text-[var(--tx-1)]">${{ "%.5f"|format(stats.cost_today) }}</div>
-  </div>
-  <div class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-4">
-    <div class="text-[var(--tx-4)] text-xs mb-1">Runs (this session)</div>
-    <div class="text-2xl font-bold text-[var(--tx-1)]">{{ stats.runs_today }}</div>
-  </div>
-  <div class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-4">
-    <div class="text-[var(--tx-4)] text-xs mb-1">Pending approvals</div>
-    <div class="text-2xl font-bold {% if stats.pending > 0 %}text-orange-400{% else %}text-[var(--tx-1)]{% endif %}">
-      {{ stats.pending }}
-      {% if stats.pending > 0 %}
-      <a href="/approvals" class="text-sm font-normal text-orange-400 hover:underline ml-1">review →</a>
-      {% endif %}
-    </div>
-  </div>
-</div>
-
-<!-- Submit task (admin only) -->
-{% if role == 'admin' %}
-<div class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-5 mb-6">
-  <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide mb-3">Submit task</h2>
-  <form method="post" action="/tasks">
-    <div class="flex gap-3">
-      <input name="question" type="text" placeholder="Ask anything…"
-             class="flex-1 bg-[var(--bg-input)] border border-[var(--border-in)] rounded px-3 py-2 text-sm text-[var(--tx-1)] placeholder-[var(--tx-4)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] focus:border-[var(--brand)]"
-             autofocus>
-      <button type="submit"
-              class="bg-[var(--brand)] text-black px-5 py-2 rounded text-sm font-bold hover:bg-[var(--brand-h)] transition-colors">
-        Run
-      </button>
-    </div>
-  </form>
-</div>
-{% else %}
-<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded p-4 mb-6 text-sm text-[var(--tx-4)]">
-  You are logged in as a <strong class="text-[var(--tx-3)]">viewer</strong> — task submission is restricted to admin accounts.
-</div>
-{% endif %}
-
-<!-- Routing tier mix -->
-{% if stats.tier_counts %}
-<div class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-5 mb-6">
-  <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide mb-3">Routing tier mix</h2>
-  <div class="flex gap-8">
-    {% for tier, count in stats.tier_counts.items() %}
+<div class="max-w-2xl mx-auto">
+  <!-- Chat entry point -->
+  <a href="/chat"
+     class="flex items-center justify-between bg-[var(--brand)] hover:bg-[var(--brand-h)] transition-colors text-black rounded-lg px-6 py-4 mb-8 group">
     <div>
-      <div class="text-xl font-bold text-[var(--brand)]">{{ count }}</div>
-      <div class="text-xs text-[var(--tx-4)]">{{ tier }}</div>
+      <div class="font-bold text-sm">Open Agent Chat</div>
+      <div class="text-xs opacity-70 mt-0.5">Powered by PydanticAI · policy-gated tool calls</div>
     </div>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
+    <svg class="w-5 h-5 opacity-80 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+  </a>
 
-<!-- Recent runs -->
-<div class="bg-[var(--bg-card)] rounded border border-[var(--border)]">
-  <div class="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
-    <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide">Recent runs</h2>
+  <!-- Compliance surfaces -->
+  <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide mb-3">Compliance surfaces</h2>
+  <div class="grid grid-cols-2 gap-3 mb-8">
+
+    <a href="/approvals"
+       class="bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border {% if pending_approvals > 0 %}border-orange-700/60{% else %}border-[var(--border)]{% endif %} rounded-lg p-4 transition-colors">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-sm font-medium text-[var(--tx-1)]">Approvals</span>
+        {% if pending_approvals > 0 %}
+        <span class="text-xs font-bold text-orange-400 bg-orange-900/30 px-2 py-0.5 rounded-full">{{ pending_approvals }} pending</span>
+        {% endif %}
+      </div>
+      <div class="text-xs text-[var(--tx-4)]">Review &amp; approve tool calls requiring human sign-off</div>
+    </a>
+
+    <a href="/audit"
+       class="bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border)] rounded-lg p-4 transition-colors">
+      <div class="text-sm font-medium text-[var(--tx-1)] mb-1">Audit trail</div>
+      <div class="text-xs text-[var(--tx-4)]">Hash-chained immutable record of every tool call &amp; decision</div>
+    </a>
+
   </div>
-  {% if recent_runs %}
-  <table class="w-full text-sm">
-    <thead class="bg-[var(--bg-page)] text-[var(--tx-4)] text-xs">
-      <tr>
-        <th class="px-5 py-2 text-left font-medium">Run</th>
-        <th class="px-5 py-2 text-left font-medium">Question</th>
-        <th class="px-5 py-2 text-left font-medium">Tier</th>
-        <th class="px-5 py-2 text-left font-medium">Status</th>
-        <th class="px-5 py-2 text-left font-medium">Cost</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for run in recent_runs %}
-      <tr class="border-t border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors">
-        <td class="px-5 py-3">
-          <a href="/tasks/{{ run.run_id }}" class="text-[var(--brand)] hover:underline font-mono text-xs">
-            {{ run.run_id[:8] }}
-          </a>
-        </td>
-        <td class="px-5 py-3 max-w-xs truncate text-[var(--tx-3)] text-xs">{{ run.question }}</td>
-        <td class="px-5 py-3 text-[var(--tx-4)] text-xs">{{ run.tier or "—" }}</td>
-        <td class="px-5 py-3 text-xs">
-          <span class="px-2 py-0.5 rounded
-            {% if run.status == 'done' %}bg-green-900/40 text-green-400
-            {% elif run.status == 'running' %}bg-blue-900/40 text-blue-400
-            {% else %}bg-red-900/40 text-red-400{% endif %}">
-            {{ run.status }}
-          </span>
-        </td>
-        <td class="px-5 py-3 text-[var(--tx-4)] text-xs font-mono">
-          {% if run.cost_usd is not none %}${{ "%.5f"|format(run.cost_usd) }}{% else %}—{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="px-5 py-12 text-center text-[var(--tx-4)] text-sm">
-    No runs yet. Submit a task above.
+
+  <!-- Admin surfaces (admin only) -->
+  {% if role == 'admin' %}
+  <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide mb-3">Admin</h2>
+  <div class="grid grid-cols-2 gap-3">
+
+    <a href="/admin/settings"
+       class="bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border)] rounded-lg p-4 transition-colors">
+      <div class="text-sm font-medium text-[var(--tx-1)] mb-1">Settings</div>
+      <div class="text-xs text-[var(--tx-4)]">Router type, model tiers, budget, policy engine</div>
+    </a>
+
+    <a href="/admin/users"
+       class="bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border)] rounded-lg p-4 transition-colors">
+      <div class="text-sm font-medium text-[var(--tx-1)] mb-1">Users</div>
+      <div class="text-xs text-[var(--tx-4)]">Manage console accounts and roles</div>
+    </a>
+
   </div>
   {% endif %}
+
 </div>
 
 {% endblock %}

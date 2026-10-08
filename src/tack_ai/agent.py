@@ -45,7 +45,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOGS_DIR = PROJECT_ROOT / "logs"
 
 settings = Settings()
-settings.check_providers(required=["anthropic"])
 
 logfire.configure(
     token=settings.logfire_token or None,
@@ -92,7 +91,10 @@ _UNTRUSTED_WARNING = (
 )
 
 agent: Agent[None, ResearchAnswer] = Agent(
-    build_model(_model_config["tiers"]["general"], settings),
+    # No default model — CLI run() and to_web() both supply the model explicitly.
+    # Setting a model here would cause to_web() to deduplicate it against the
+    # models= dict entries (same model_id), hiding the tier labels from the UI.
+    None,
     output_type=ResearchAnswer,
     system_prompt=(
         "You are a research assistant. You may call tools to find information. "
@@ -368,6 +370,7 @@ def _log_route(question: str, route: Route, model_str: str, cost_usd: float) -> 
 
 
 async def run(question: str) -> None:
+    settings.check_providers(required=["anthropic"])
     run_id = str(uuid.uuid4())
     current_run_id.set(run_id)
 

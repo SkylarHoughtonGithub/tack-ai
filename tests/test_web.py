@@ -84,13 +84,7 @@ def test_admin_users_page_accessible_as_admin(client):
     assert "admin" in resp.text.lower()
 
 
-def test_submit_task_requires_auth(client):
-    resp = client.post("/tasks", data={"question": "hello"})
+def test_chat_requires_auth(client):
+    resp = client.get("/chat", follow_redirects=False)
     assert resp.status_code == 303
     assert "/login" in resp.headers.get("location", "")
-
-
-def test_task_not_found(client):
-    _login(client)
-    resp = client.get("/tasks/nonexistent-run-id", follow_redirects=True)
-    assert resp.status_code == 404
