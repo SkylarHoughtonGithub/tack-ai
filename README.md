@@ -1,4 +1,12 @@
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="templates/img/tack-ai-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="templates/img/tack-ai-logo-light.png">
+    <img src="templates/img/tack-ai-logo-dark.png" alt="tack-ai" width="100">
+  </picture>
+
 # tack-ai
+</div>
 
 A personal AI agent harness that routes tasks across Anthropic and OpenAI models, enforces policy via OPA before every tool call, and records everything in a tamper-evident audit trail. Built as a structured learning project across 12 phases.
 
