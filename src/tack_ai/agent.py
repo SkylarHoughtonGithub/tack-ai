@@ -56,15 +56,8 @@ _memory: ConversationMemory | None = None
 
 def _get_memory() -> ConversationMemory | None:
     global _memory
-    summarizer_str = _model_config["tiers"]["simple"]
-    summarizer_provider = summarizer_str.split(":")[0]
-    provider_key_available = bool(getattr(settings, f"{summarizer_provider}_api_key", None))
-    if _memory is None and settings.database_url and provider_key_available:
-        _memory = ConversationMemory(
-            db_url=settings.database_url,
-            model_str=summarizer_str,
-            settings=settings,
-        )
+    if _memory is None and settings.database_url:
+        _memory = ConversationMemory(db_url=settings.database_url)
     return _memory
 
 
@@ -253,6 +246,12 @@ async def write_file(path: str, content: str) -> str:
         return "Error: access outside the project folder is not allowed."
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
+    if settings.database_url and settings.openai_api_key:
+        from tack_ai.memory.code_index import embed_file  # noqa: PLC0415
+
+        asyncio.create_task(
+            embed_file(str(target), content, settings.database_url, settings.get_key("openai"))
+        )
     return f"Written {len(content)} bytes to {path}."
 
 
@@ -437,24 +436,21 @@ async def run(question: str) -> None:
         )
     )
 
-    # 3. Conversation memory context
+    # 3. Conversation memory — load prior messages for this session
     session_id = run_id
     memory = _get_memory()
-    memory_context = ""
-    if memory:
-        memory_context = await memory.get_context(session_id)
+    prior_messages = await memory.get_messages(session_id) if memory else []
 
-    full_question = f"{memory_context}\n\nUser: {question}" if memory_context else question
-
-    # 4. Run — provider-appropriate caching settings applied at dispatch time
+    # 4. Run — native message_history carries full context; no string prepending needed
     from pydantic_ai.exceptions import UsageLimitExceeded  # noqa: PLC0415
 
     try:
         result = await agent.run(
-            full_question,
+            question,
             model=model,
             model_settings=make_run_settings(model_str),
             usage_limits=_USAGE_LIMITS,
+            message_history=prior_messages or None,
         )
     except UsageLimitExceeded as e:
         print(f"\n✗ Tool call limit hit: {e}")
@@ -462,10 +458,9 @@ async def run(question: str) -> None:
         print("  Check the log lines above for which tools were called and why they failed.")
         return
 
-    # 5. Store this turn in memory
+    # 5. Persist full message history for this session
     if memory:
-        await memory.add_turn(session_id, "user", question)
-        await memory.add_turn(session_id, "assistant", result.output.summary)
+        await memory.save_messages(session_id, result.all_messages())
 
     # 6. Cost
     cost = _estimate_cost(result.usage, model_str)
