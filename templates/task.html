@@ -3,19 +3,19 @@
 {% block content %}
 
 <div class="flex items-center gap-3 mb-4">
-  <a href="/" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">← back</a>
-  <h1 class="font-bold">Task <span class="font-mono text-gray-400">{{ run_id[:8] }}</span></h1>
+  <a href="/" class="text-[var(--tx-4)] hover:text-[var(--brand)] text-sm transition-colors">← back</a>
+  <h1 class="font-bold">Task <span class="font-mono text-[var(--tx-4)]">{{ run_id[:8] }}</span></h1>
   <span id="status-badge" class="text-xs px-2 py-0.5 rounded
-    {% if status == 'waiting_follow_up' %}bg-yellow-100 text-yellow-700
-    {% elif status in ('closed', 'done') %}bg-green-100 text-green-700
-    {% elif status in ('failed', 'cancelled') %}bg-red-100 text-red-700
-    {% else %}bg-blue-100 text-blue-700{% endif %}">
+    {% if status == 'waiting_follow_up' %}bg-yellow-900/40 text-yellow-400
+    {% elif status in ('closed', 'done') %}bg-green-900/40 text-green-400
+    {% elif status in ('failed', 'cancelled') %}bg-red-900/40 text-red-400
+    {% else %}bg-blue-900/40 text-blue-400{% endif %}">
     {% if status == 'waiting_follow_up' %}waiting{% elif status == 'closed' %}closed{% else %}{{ status }}{% endif %}
   </span>
   {% if status == 'running' %}
   <form method="post" action="/tasks/{{ run_id }}/cancel" id="cancel-form" class="inline">
     <button type="submit"
-            class="text-xs px-3 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
+            class="text-xs px-3 py-0.5 rounded bg-red-900/30 text-red-400 border border-red-800/60 hover:bg-red-900/50 transition-colors">
       Stop
     </button>
   </form>
@@ -26,56 +26,56 @@
 {% if completed_turns and completed_turns|length > 1 %}
 <div class="space-y-3 mb-4">
   {% for turn in completed_turns[:-1] %}
-  <div class="bg-white rounded border p-4 opacity-75">
-    <div class="text-gray-400 text-xs mb-1">Turn {{ loop.index }}</div>
-    <div class="text-sm font-medium text-gray-700 mb-2">{{ turn.question }}</div>
-    <div class="text-xs text-gray-500 border-t pt-2 mt-2">{{ turn.answer or "—" }}</div>
+  <div class="bg-[var(--bg-page)] rounded border border-[var(--border)] p-4 opacity-70">
+    <div class="text-[var(--tx-4)] text-xs mb-1">Turn {{ loop.index }}</div>
+    <div class="text-sm font-medium text-[var(--tx-3)] mb-2">{{ turn.question }}</div>
+    <div class="text-xs text-[var(--tx-4)] border-t border-[var(--border)] pt-2 mt-2">{{ turn.answer or "—" }}</div>
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
 <!-- Current question -->
-<div class="bg-white rounded border p-4 mb-4">
-  <div class="text-gray-400 text-xs mb-1">
+<div class="bg-[var(--bg-card)] rounded border border-[var(--border)] p-4 mb-4">
+  <div class="text-[var(--tx-4)] text-xs mb-1">
     {% if completed_turns %}Turn {{ completed_turns|length }}{% else %}Question{% endif %}
   </div>
-  <div class="text-sm">{{ question }}</div>
+  <div class="text-sm text-[var(--tx-1)]">{{ question }}</div>
 </div>
 
 <!-- Event log (reasoning trace + live events) -->
 <div id="event-log"
-     class="bg-gray-900 text-gray-100 rounded p-4 font-mono text-sm space-y-0.5 min-h-40 max-h-96 overflow-y-auto">
+     class="bg-black border border-[var(--border-sub)] text-[var(--tx-1)] rounded p-4 font-mono text-sm space-y-0.5 min-h-40 max-h-96 overflow-y-auto">
   {% if status not in ('running', 'waiting_follow_up') %}
-  <span class="text-gray-500">(task complete)</span>
+  <span class="text-[var(--tx-4)]">(task complete)</span>
   {% else %}
-  <span class="text-gray-500">Connecting…</span>
+  <span class="text-[var(--tx-4)]">Connecting…</span>
   {% endif %}
 </div>
 
 <!-- Answer box (hidden until first answer) -->
-<div id="answer-box" class="hidden bg-white rounded border p-5 mt-4">
-  <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Answer</h2>
-  <p id="answer-summary" class="text-sm leading-relaxed mb-3"></p>
-  <div class="text-xs text-gray-400 space-y-1 border-t pt-3 font-mono">
-    <div>sources:    <span id="answer-sources" class="text-gray-600">—</span></div>
-    <div>confidence: <span id="answer-confidence" class="text-gray-600">—</span></div>
-    <div>cost:       <span id="answer-cost" class="text-gray-600">—</span></div>
-    <div>tokens:     <span id="answer-tokens" class="text-gray-600">—</span></div>
+<div id="answer-box" class="hidden bg-[var(--bg-card)] rounded border border-[var(--border)] p-5 mt-4">
+  <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide mb-3">Answer</h2>
+  <p id="answer-summary" class="text-sm leading-relaxed mb-3 text-[var(--tx-1)]"></p>
+  <div class="text-xs text-[var(--tx-4)] space-y-1 border-t border-[var(--border)] pt-3 font-mono">
+    <div>sources:    <span id="answer-sources" class="text-[var(--tx-3)]">—</span></div>
+    <div>confidence: <span id="answer-confidence" class="text-[var(--tx-3)]">—</span></div>
+    <div>cost:       <span id="answer-cost" class="text-[var(--tx-3)]">—</span></div>
+    <div>tokens:     <span id="answer-tokens" class="text-[var(--tx-3)]">—</span></div>
   </div>
 </div>
 
 <!-- Approval banner -->
-<div id="approval-banner" class="hidden bg-orange-50 border border-orange-200 rounded p-5 mt-4">
-  <h3 class="font-bold text-orange-800 text-sm mb-2">Approval required</h3>
-  <div id="approval-details" class="text-xs text-orange-700 font-mono mb-4 whitespace-pre-wrap"></div>
+<div id="approval-banner" class="hidden bg-orange-900/20 border border-orange-700/60 rounded p-5 mt-4">
+  <h3 class="font-bold text-orange-400 text-sm mb-2">Approval required</h3>
+  <div id="approval-details" class="text-xs text-orange-300 font-mono mb-4 whitespace-pre-wrap"></div>
   <div class="flex gap-3">
     <button onclick="resolveApproval(true)"
-            class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition-colors">
+            class="bg-[var(--brand)] text-black px-4 py-2 rounded text-sm font-bold hover:bg-[var(--brand-h)] transition-colors">
       Approve
     </button>
     <button onclick="resolveApproval(false)"
-            class="bg-red-100 text-red-700 px-4 py-2 rounded text-sm hover:bg-red-200 transition-colors">
+            class="bg-red-900/30 text-red-400 border border-red-800/60 px-4 py-2 rounded text-sm hover:bg-red-900/50 transition-colors">
       Deny
     </button>
   </div>
@@ -83,22 +83,22 @@
 
 <!-- Follow-up input (shown when waiting_follow_up) -->
 {% if role == 'admin' %}
-<div id="follow-up-box" class="{% if status != 'waiting_follow_up' %}hidden{% endif %} bg-white rounded border p-5 mt-4">
-  <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Follow-up</h2>
+<div id="follow-up-box" class="{% if status != 'waiting_follow_up' %}hidden{% endif %} bg-[var(--bg-card)] rounded border border-[var(--border)] p-5 mt-4">
+  <h2 class="text-xs font-semibold text-[var(--tx-4)] uppercase tracking-wide mb-3">Follow-up</h2>
   <form method="post" action="/tasks/{{ run_id }}/message" id="follow-up-form">
     <div class="flex gap-3">
       <input name="question" type="text" id="follow-up-input"
              placeholder="Ask a follow-up question…"
-             class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+             class="flex-1 bg-[var(--bg-input)] border border-[var(--border-in)] rounded px-3 py-2 text-sm text-[var(--tx-1)] placeholder-[var(--tx-4)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] focus:border-[var(--brand)]">
       <button type="submit"
-              class="bg-gray-900 text-white px-5 py-2 rounded text-sm hover:bg-gray-700 transition-colors">
+              class="bg-[var(--brand)] text-black px-5 py-2 rounded text-sm font-bold hover:bg-[var(--brand-h)] transition-colors">
         Send
       </button>
     </div>
   </form>
   <form method="post" action="/tasks/{{ run_id }}/close" class="mt-3">
     <button type="submit"
-            class="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            class="text-xs text-[var(--tx-4)] hover:text-[var(--tx-3)] transition-colors">
       End conversation
     </button>
   </form>
@@ -115,8 +115,7 @@
   let taskActive = activeStatuses.has(initialStatus);
 
   function logLine(text, cls) {
-    // Remove "Connecting…" placeholder on first real event
-    const placeholder = log.querySelector("span.text-gray-500");
+    const placeholder = log.querySelector("span.text-[var(--tx-4)]");
     if (placeholder) placeholder.remove();
     const el = document.createElement("div");
     if (cls) el.className = cls;
@@ -126,15 +125,15 @@
   }
 
   function logReasoning(content) {
-    const placeholder = log.querySelector("span.text-gray-500");
+    const placeholder = log.querySelector("span.text-[var(--tx-4)]");
     if (placeholder) placeholder.remove();
     const wrap = document.createElement("details");
     wrap.className = "my-0.5";
     const summary = document.createElement("summary");
-    summary.className = "cursor-pointer text-purple-300 text-xs select-none";
+    summary.className = "cursor-pointer text-purple-400 text-xs select-none";
     summary.textContent = "▶ reasoning trace";
     const pre = document.createElement("pre");
-    pre.className = "text-gray-400 text-xs whitespace-pre-wrap pl-3 mt-1 max-h-40 overflow-y-auto";
+    pre.className = "text-[var(--tx-4)] text-xs whitespace-pre-wrap pl-3 mt-1 max-h-40 overflow-y-auto";
     pre.textContent = content;
     wrap.appendChild(summary);
     wrap.appendChild(pre);
@@ -154,7 +153,7 @@
     fetch(path, { method: "POST" }).then(() => {
       document.getElementById("approval-banner").classList.add("hidden");
       logLine(approve ? "→ approved" : "→ denied",
-              approve ? "text-green-400" : "text-red-400");
+              approve ? "text-[var(--brand)]" : "text-red-400");
       currentApprovalId = null;
     });
   }
@@ -170,24 +169,24 @@
 
       if (d.type === "turn_start") {
         if (d.turn_index > 0) {
-          logLine("─── turn " + (d.turn_index + 1) + ": " + d.question, "text-gray-500 mt-2");
+          logLine("─── turn " + (d.turn_index + 1) + ": " + d.question, "text-[var(--tx-4)] mt-2");
         }
 
       } else if (d.type === "turn_end") {
         // No UI action needed; answer box already shown
 
       } else if (d.type === "status") {
-        logLine("» " + d.message, "text-gray-400");
+        logLine("» " + d.message, "text-[var(--tx-4)]");
 
       } else if (d.type === "warning") {
         d.message.split("\n").forEach(function(line) {
-          logLine("⚠ " + line, "text-orange-300");
+          logLine("⚠ " + line, "text-orange-400");
         });
 
       } else if (d.type === "routing") {
         logLine(
           "route: " + d.tier + " / " + d.effort + " — " + d.reason,
-          "text-yellow-300"
+          "text-yellow-400"
         );
 
       } else if (d.type === "tool_call") {
@@ -212,10 +211,9 @@
         document.getElementById("answer-tokens").textContent =
           "in=" + (d.input_tokens || 0) + " out=" + (d.output_tokens || 0);
         document.getElementById("answer-box").classList.remove("hidden");
-        logLine("✓ answer ready", "text-green-400");
-        setStatus("waiting", "bg-yellow-100 text-yellow-700");
+        logLine("✓ answer ready", "text-[var(--brand)]");
+        setStatus("waiting", "bg-yellow-900/40 text-yellow-400");
 
-        // Show follow-up input for admins
         if (isAdmin) {
           const followUpBox = document.getElementById("follow-up-box");
           if (followUpBox) {
@@ -232,11 +230,11 @@
             "actor: " + d.actor + "\ntool:  " + d.tool_name + "\nargs: " + JSON.stringify(d.args, null, 2);
           document.getElementById("approval-banner").classList.remove("hidden");
         }
-        logLine("⚠ approval required: " + d.tool_name, "text-orange-300");
+        logLine("⚠ approval required: " + d.tool_name, "text-orange-400");
 
       } else if (d.type === "error") {
         logLine("✗ " + d.message, "text-red-400");
-        setStatus("failed", "bg-red-100 text-red-700");
+        setStatus("failed", "bg-red-900/40 text-red-400");
 
       } else if (d.type === "done") {
         taskActive = false;
@@ -248,7 +246,7 @@
         if (followUpBox) followUpBox.classList.add("hidden");
         const badge = document.getElementById("status-badge");
         if (badge.textContent !== "failed") {
-          setStatus("closed", "bg-green-100 text-green-700");
+          setStatus("closed", "bg-green-900/40 text-green-400");
         }
         es.close();
       }
@@ -258,7 +256,7 @@
       if (document.getElementById("status-badge").textContent === "running" ||
           document.getElementById("status-badge").textContent === "waiting") {
         logLine("connection lost", "text-red-400");
-        setStatus("failed", "bg-red-100 text-red-700");
+        setStatus("failed", "bg-red-900/40 text-red-400");
       }
       es.close();
     };

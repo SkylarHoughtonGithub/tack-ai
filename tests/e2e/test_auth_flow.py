@@ -22,7 +22,7 @@ PASSWORD = os.environ.get("WEB_PASSWORD", "changeme")
 
 def test_login_page_renders(page: Page):
     page.goto(f"{BASE_URL}/login")
-    expect(page.locator("h1")).to_contain_text("Tack-AI Console")
+    expect(page.locator("h1")).to_contain_text("TACK-AI")
     expect(page.locator("input[name='username']")).to_be_visible()
     expect(page.locator("input[name='password']")).to_be_visible()
 
@@ -54,7 +54,8 @@ def test_audit_page_accessible_after_login(page: Page):
     page.fill("input[name='username']", USERNAME)
     page.fill("input[name='password']", PASSWORD)
     page.click("button[type='submit']")
-    page.click("text=audit")
+    page.click("#dd-history button")
+    page.click("a[href='/audit'].dd-item")
     expect(page).to_have_url(f"{BASE_URL}/audit")
 
 
@@ -63,7 +64,8 @@ def test_approvals_page_accessible_after_login(page: Page):
     page.fill("input[name='username']", USERNAME)
     page.fill("input[name='password']", PASSWORD)
     page.click("button[type='submit']")
-    page.click("text=approvals")
+    page.click("#dd-tasks button")
+    page.click("a[href='/approvals'].dd-item")
     expect(page).to_have_url(f"{BASE_URL}/approvals")
     expect(page.locator("h1")).to_contain_text("Approvals")
 
@@ -82,6 +84,7 @@ def test_admin_users_page_visible_for_admin(page: Page):
     page.fill("input[name='username']", USERNAME)
     page.fill("input[name='password']", PASSWORD)
     page.click("button[type='submit']")
-    page.click("text=users")
+    page.click("#dd-admin button")
+    page.click("a[href='/admin/users'].dd-item")
     expect(page).to_have_url(f"{BASE_URL}/admin/users")
     expect(page.locator("h1")).to_contain_text("User Management")

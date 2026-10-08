@@ -43,8 +43,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
-from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
@@ -85,6 +85,7 @@ async def lifespan(fastapi_app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(title="Tack-AI Console", docs_url=None, redoc_url=None, lifespan=lifespan)
+app.mount("/static/img", StaticFiles(directory=str(TEMPLATES_DIR / "img")), name="static_img")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 SESSION_TTL = timedelta(hours=24)
@@ -1184,15 +1185,272 @@ async def audit_export(
 
 # ── API docs (auth-gated) ─────────────────────────────────────────────────────
 
+_BRAND = "#4DCF1E"
+_BRAND_HOVER = "#60E82A"
+
+_SWAGGER_DARK_CSS = f"""
+body {{ margin: 0; background: #0d0d0d; }}
+.swagger-ui .topbar {{ display: none; }}
+.swagger-ui {{ color: #e5e7eb; background: #0d0d0d; font-family: monospace; }}
+.swagger-ui .wrapper {{ background: #0d0d0d; }}
+.swagger-ui .info .title {{ color: {_BRAND}; font-family: monospace; }}
+.swagger-ui .info p, .swagger-ui .info li, .swagger-ui .info a {{ color: #9ca3af; }}
+.swagger-ui .scheme-container {{ background: #111; box-shadow: none; border-bottom: 1px solid #222; }}
+.swagger-ui .opblock {{ background: #111; border: 1px solid #222; box-shadow: none; }}
+.swagger-ui .opblock .opblock-summary {{ border-bottom: 1px solid #222; }}
+.swagger-ui .opblock.opblock-get {{ border-color: rgba(77,207,30,.25); background: rgba(77,207,30,.04); }}
+.swagger-ui .opblock.opblock-get .opblock-summary-method {{ background: {_BRAND}; color: #000; }}
+.swagger-ui .opblock.opblock-post {{ border-color: rgba(59,130,246,.25); background: rgba(59,130,246,.04); }}
+.swagger-ui .opblock.opblock-post .opblock-summary-method {{ background: #3b82f6; }}
+.swagger-ui .opblock.opblock-delete {{ border-color: rgba(239,68,68,.25); background: rgba(239,68,68,.04); }}
+.swagger-ui .opblock.opblock-delete .opblock-summary-method {{ background: #ef4444; }}
+.swagger-ui .opblock.opblock-put {{ border-color: rgba(245,158,11,.25); background: rgba(245,158,11,.04); }}
+.swagger-ui .opblock.opblock-put .opblock-summary-method {{ background: #f59e0b; }}
+.swagger-ui .opblock.opblock-patch {{ border-color: rgba(99,102,241,.25); background: rgba(99,102,241,.04); }}
+.swagger-ui .opblock.opblock-patch .opblock-summary-method {{ background: #6366f1; }}
+.swagger-ui .opblock-summary-description, .swagger-ui .opblock-summary-path,
+.swagger-ui .opblock-summary-path__deprecated {{ color: #9ca3af; }}
+.swagger-ui .opblock-description-wrapper p, .swagger-ui .opblock-external-docs-wrapper p {{ color: #9ca3af; }}
+.swagger-ui table thead tr td, .swagger-ui table thead tr th {{ border-bottom: 1px solid #333; color: #9ca3af; }}
+.swagger-ui .parameter__name {{ color: #e5e7eb; }}
+.swagger-ui .parameter__type {{ color: {_BRAND}; }}
+.swagger-ui .parameter__in {{ color: #6b7280; font-style: italic; }}
+.swagger-ui .parameter__deprecated {{ color: #6b7280; }}
+.swagger-ui input[type=text], .swagger-ui input[type=password], .swagger-ui input[type=search],
+.swagger-ui input[type=email], .swagger-ui textarea, .swagger-ui select {{
+  background: #1a1a1a !important; border: 1px solid #333 !important; color: #e5e7eb !important;
+}}
+.swagger-ui .btn {{ background: #1a1a1a; color: #e5e7eb; border: 1px solid #333; }}
+.swagger-ui .btn:hover {{ background: #222; border-color: #444; }}
+.swagger-ui .btn.execute {{ background: {_BRAND}; color: #000; border-color: {_BRAND}; font-weight: 700; }}
+.swagger-ui .btn.execute:hover {{ background: {_BRAND_HOVER}; border-color: {_BRAND_HOVER}; }}
+.swagger-ui .btn.authorize {{ background: transparent; color: {_BRAND}; border-color: {_BRAND}; }}
+.swagger-ui .btn.authorize svg {{ fill: {_BRAND}; }}
+.swagger-ui .btn.cancel {{ background: transparent; color: #ef4444; border-color: #ef4444; }}
+.swagger-ui .auth-container {{ background: #111; border-color: #222; }}
+.swagger-ui .dialog-ux .modal-ux {{ background: #111; border: 1px solid #222; }}
+.swagger-ui .dialog-ux .modal-ux-header {{ border-bottom: 1px solid #222; }}
+.swagger-ui .dialog-ux .modal-ux-header h3 {{ color: {_BRAND}; }}
+.swagger-ui section.models {{ border: 1px solid #222; background: #0d0d0d; }}
+.swagger-ui section.models h4 {{ color: #9ca3af; border-bottom: 1px solid #222; background: #0d0d0d; }}
+.swagger-ui section.models h4 span {{ color: #9ca3af; }}
+.swagger-ui section.models h4 svg {{ fill: #6b7280; }}
+.swagger-ui section.models .model-container {{ background: #161616; border-top: 1px solid #222; margin: 0; padding: 8px 16px; }}
+.swagger-ui section.models .model-container:hover {{ background: #1a1a1a; }}
+.swagger-ui .model-box {{ background: transparent !important; box-shadow: none !important; }}
+.swagger-ui .model-title {{ color: #c9d1d9; font-weight: 500; font-size: 13px; }}
+.swagger-ui .model-title__text {{ color: #c9d1d9; }}
+.swagger-ui .model {{ color: #8b949e; }}
+.swagger-ui .model span {{ color: #8b949e; }}
+.swagger-ui .model .property {{ color: #8b949e; }}
+.swagger-ui .model .property.primitive {{ color: #8b949e; }}
+.swagger-ui span[class*="model-title"] {{ background: transparent !important; }}
+.swagger-ui .model span.model {{ background: transparent; }}
+.swagger-ui .prop-type {{ color: #8b949e; }}
+.swagger-ui .prop-format {{ color: #6b7280; }}
+/* "object" / type badge text — neutralise the default blue */
+.swagger-ui .model > span, .swagger-ui .model > .prop-type,
+.swagger-ui span.model-title + span {{ color: #8b949e !important; }}
+/* "Expand all" button */
+.swagger-ui .model-box .model-box--body {{ color: #6b7280; border-color: #333; background: transparent; }}
+.swagger-ui button.model-box--body:hover {{ color: #9ca3af; border-color: #4b5563; }}
+.swagger-ui .highlight-code, .swagger-ui .microlight {{ background: #0d0d0d !important; }}
+.swagger-ui .opblock-body pre.microlight {{ background: #0d0d0d !important; color: #e5e7eb; }}
+/* Parameters / Responses section headers */
+.swagger-ui .opblock .opblock-section-header {{
+  background: #1a1a1a !important; box-shadow: none !important;
+  border-top: 1px solid #333;
+}}
+.swagger-ui .opblock .opblock-section-header h4 {{ color: #9ca3af !important; font-weight: 600; }}
+.swagger-ui .opblock .opblock-section-header label {{ color: #9ca3af !important; }}
+.swagger-ui .opblock .opblock-section-header .btn {{ background: transparent !important; color: #6b7280 !important; border-color: #444 !important; }}
+/* opblock body + param rows */
+.swagger-ui .opblock-body {{ background: #0d0d0d; }}
+.swagger-ui .opblock-body tr, .swagger-ui .opblock-body td {{ background: transparent !important; }}
+.swagger-ui .parameters-container, .swagger-ui .parameters {{ background: transparent; }}
+.swagger-ui tr.parameters {{ background: transparent; }}
+.swagger-ui .no-margin p {{ color: #9ca3af; }}
+.swagger-ui .parameters-col_description p {{ color: #9ca3af; }}
+/* Response area */
+.swagger-ui .response-col_status {{ color: #e5e7eb; }}
+.swagger-ui .response-col_description {{ color: #9ca3af; }}
+.swagger-ui .responses-inner {{ background: #0d0d0d; border: 1px solid #222; }}
+.swagger-ui .response {{ background: #111; border-color: #222; }}
+.swagger-ui .response-content-type {{ background: transparent; color: #9ca3af; }}
+/* Nested model / inner object — remove stray light backgrounds */
+.swagger-ui .inner-object {{ background: transparent !important; }}
+.swagger-ui .model-box-control {{ background: transparent !important; }}
+.swagger-ui span.model span {{ color: #8b949e !important; background: transparent !important; }}
+.swagger-ui .model .inner-object .model-title {{ color: #8b949e !important; background: transparent !important; }}
+.swagger-ui .model table tr td {{ background: transparent !important; color: #8b949e; }}
+.swagger-ui .model table {{ background: transparent; }}
+/* "array<object>", compound type text */
+.swagger-ui .model > .prop-type, .swagger-ui .model span[class*="prop-type"] {{ color: #8b949e !important; }}
+.swagger-ui .tab li {{ color: #9ca3af; }}
+.swagger-ui .tab li.tabitem.active {{ color: {_BRAND}; }}
+.swagger-ui .servers > label {{ color: #9ca3af; }}
+.swagger-ui .servers > label select {{ color: #e5e7eb; background: #1a1a1a; border: 1px solid #333; }}
+.swagger-ui svg.arrow {{ fill: #9ca3af; }}
+.swagger-ui .url {{ color: {_BRAND}; }}
+"""
+
 
 @app.get("/docs", include_in_schema=False)
 async def swagger_ui(user: str = Depends(_auth)) -> Response:
-    return get_swagger_ui_html(openapi_url="/openapi.json", title="Tack-AI API Docs")
+    from fastapi.responses import HTMLResponse  # noqa: PLC0415
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>Tack-AI API Docs</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // Apply theme class before any CSS loads to prevent flash
+    var _theme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', _theme);
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+  <!-- Dark overrides — disabled at parse time, enabled by JS when theme=dark -->
+  <style id="dark-style" disabled>{_SWAGGER_DARK_CSS}</style>
+  <style>
+    html[data-theme="light"] body {{ background: #fff; }}
+    #docs-nav {{
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px; font-family: monospace; font-size: 13px;
+      border-bottom: 1px solid var(--nav-border, #1e1e1e);
+      background: var(--nav-bg, #000); color: var(--nav-tx, #9ca3af);
+    }}
+    html[data-theme="light"] #docs-nav {{
+      --nav-bg: #fff; --nav-border: #e2e8f0; --nav-tx: #475569;
+    }}
+    #docs-nav a {{ color: inherit; text-decoration: none; }}
+    #docs-nav a:hover, #docs-toggle:hover {{ color: var(--nav-brand, #4DCF1E); }}
+    html[data-theme="light"] #docs-nav a:hover,
+    html[data-theme="light"] #docs-toggle:hover {{ --nav-brand: #2da312; color: #2da312; }}
+    #docs-toggle {{ background: none; border: none; cursor: pointer; font-size: 14px;
+                    color: inherit; font-family: monospace; padding: 0 4px; }}
+    #docs-brand {{ color: var(--nav-brand, #4DCF1E); font-weight: bold; }}
+    html[data-theme="light"] #docs-brand {{ color: #2da312; }}
+  </style>
+</head>
+<body>
+  <div id="docs-nav">
+    <div style="display:flex;align-items:center;gap:20px">
+      <a href="/">← back</a>
+      <span id="docs-brand">tack-ai</span>
+      <span>API Docs</span>
+    </div>
+    <button id="docs-toggle" onclick="toggleDocsTheme()" title="Toggle light / dark"></button>
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    var isDark = (localStorage.getItem('theme') || 'dark') === 'dark';
+
+    function setDocsTheme(dark) {{
+      isDark = dark;
+      document.getElementById('dark-style').disabled = !dark;
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      document.getElementById('docs-toggle').textContent = dark ? '☀' : '☾';
+      if (dark) darkify();
+    }}
+
+    function toggleDocsTheme() {{
+      var next = !isDark;
+      localStorage.setItem('theme', next ? 'dark' : 'light');
+      // Simplest reliable approach: reload so Swagger re-renders clean
+      location.reload();
+    }}
+
+    // MutationObserver to re-apply dark patches after Swagger's JS renders
+    function darkify(root) {{
+      if (!isDark) return;
+      root = root || document;
+      root.querySelectorAll('.opblock-section-header').forEach(function(el) {{
+        el.style.background = '#1a1a1a';
+        el.style.boxShadow  = 'none';
+        el.style.borderTop  = '1px solid #333';
+      }});
+      root.querySelectorAll('.opblock-section-header h4, .opblock-section-header label').forEach(function(el) {{
+        el.style.color = '#9ca3af';
+      }});
+      root.querySelectorAll('.model-box, .inner-object').forEach(function(el) {{
+        el.style.background = 'transparent';
+        el.style.boxShadow  = 'none';
+      }});
+      root.querySelectorAll('.model span, .prop-type, .inner-object .model-title').forEach(function(el) {{
+        var c = window.getComputedStyle(el).color;
+        if (c === 'rgb(59, 65, 81)' || el.classList.contains('prop-type')) {{
+          el.style.color = '#8b949e';
+        }}
+      }});
+      root.querySelectorAll('tr.parameters td, .parameters-container').forEach(function(el) {{
+        el.style.background = 'transparent';
+      }});
+    }}
+
+    var _observer = new MutationObserver(function(mutations) {{
+      if (!isDark) return;
+      mutations.forEach(function(m) {{
+        m.addedNodes.forEach(function(n) {{ if (n.nodeType === 1) darkify(n); }});
+      }});
+      darkify();
+    }});
+
+    window.onload = function() {{
+      setDocsTheme(isDark);
+      SwaggerUIBundle({{
+        url: "/openapi.json",
+        dom_id: "#swagger-ui",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+        layout: "BaseLayout",
+        deepLinking: true,
+        onComplete: function() {{
+          darkify();
+          _observer.observe(document.getElementById('swagger-ui'), {{
+            childList: true, subtree: true
+          }});
+        }},
+      }});
+    }};
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 
 @app.get("/redoc", include_in_schema=False)
 async def redoc_ui(user: str = Depends(_auth)) -> Response:
-    return get_redoc_html(openapi_url="/openapi.json", title="Tack-AI API Docs")
+    from fastapi.responses import HTMLResponse  # noqa: PLC0415
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>Tack-AI API Docs</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>body {{ margin: 0; background: #0d0d0d; }}</style>
+</head>
+<body>
+  <div id="redoc-container"></div>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
+  <script>
+    Redoc.init("/openapi.json", {{
+      theme: {{
+        colors: {{ primary: {{ main: "{_BRAND}" }} }},
+        typography: {{ fontFamily: "monospace", fontSize: "13px" }},
+        sidebar: {{ backgroundColor: "#111", textColor: "#9ca3af" }},
+        rightPanel: {{ backgroundColor: "#0d0d0d", textColor: "#9ca3af" }},
+        logo: {{ gutter: "12px" }},
+      }},
+      hideDownloadButton: false,
+      nativeScrollbars: false,
+    }}, document.getElementById("redoc-container"));
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 
 # ── Entry point (P1: Ctrl+C fix) ──────────────────────────────────────────────

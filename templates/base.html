@@ -1,42 +1,183 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" id="html-root">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Tack-AI Console{% endblock %}</title>
+  <script>
+    (function() {
+      document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg-page:   #0d0d0d;
+      --bg-nav:    #000000;
+      --bg-card:   #111111;
+      --bg-input:  #1a1a1a;
+      --bg-hover:  #161616;
+      --border:    #222222;
+      --border-sub:#1e1e1e;
+      --border-in: #333333;
+      --tx-1:      #f3f4f6;
+      --tx-2:      #d1d5db;
+      --tx-3:      #9ca3af;
+      --tx-4:      #6b7280;
+      --brand:     #4DCF1E;
+      --brand-h:   #60E82A;
+    }
+    [data-theme="light"] {
+      --bg-page:   #f8fafc;
+      --bg-nav:    #ffffff;
+      --bg-card:   #ffffff;
+      --bg-input:  #ffffff;
+      --bg-hover:  #f1f5f9;
+      --border:    #e2e8f0;
+      --border-sub:#e2e8f0;
+      --border-in: #cbd5e1;
+      --tx-1:      #0f172a;
+      --tx-2:      #1e293b;
+      --tx-3:      #475569;
+      --tx-4:      #94a3b8;
+      --brand:     #2da312;
+      --brand-h:   #3aad15;
+    }
+    .brand-border-dim { border-color: color-mix(in srgb, var(--brand) 40%, transparent); }
+    .oidc-btn:hover   { background-color: color-mix(in srgb, var(--brand) 10%, transparent); }
+    *, *::before, *::after { transition: background-color 0.15s ease, border-color 0.15s ease, color 0.05s ease; }
+
+    /* ── Dropdown ─────────────────────────────────────── */
+    .dd { position: relative; }
+    .dd-menu {
+      display: none; position: absolute; top: calc(100% + 10px); left: 0;
+      min-width: 148px; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.35);
+      z-index: 100; padding: 4px; white-space: nowrap;
+    }
+    .dd-menu.right { left: auto; right: 0; }
+    .dd.open .dd-menu { display: block; }
+    .dd-item {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      padding: 6px 10px; border-radius: 4px; font-size: 12px; font-family: monospace;
+      color: var(--tx-3); text-decoration: none; background: none; border: none;
+      cursor: pointer; text-align: left;
+    }
+    .dd-item:hover { background: var(--bg-hover); color: var(--tx-1); }
+    .dd-sep { border-top: 1px solid var(--border); margin: 3px 0; }
+  </style>
 </head>
-<body class="bg-gray-50 min-h-screen font-mono text-gray-900">
-  <nav class="bg-gray-900 text-gray-100 px-6 py-3 flex items-center justify-between">
-    <div class="flex gap-6 items-center">
-      <a href="/" class="font-bold text-white tracking-tight">tack-ai</a>
+<body class="bg-[var(--bg-page)] min-h-screen font-mono text-[var(--tx-1)]">
+  <nav class="bg-[var(--bg-nav)] border-b border-[var(--border-sub)] px-6 py-3 flex items-center justify-between">
+
+    <!-- Left: logo + nav items -->
+    <div class="flex items-center gap-5">
+      <a href="/" class="flex items-center gap-2 mr-1">
+        <img id="nav-logo" src="/static/img/tack-ai-logo-dark.png" alt="Tack-AI" class="h-8 w-8 rounded">
+        <span class="font-bold text-[var(--brand)] tracking-tight">tack-ai</span>
+      </a>
+
       {% if user %}
-      <a href="/approvals" class="text-gray-400 hover:text-white text-sm transition-colors">approvals</a>
-      <a href="/audit" class="text-gray-400 hover:text-white text-sm transition-colors">audit</a>
-      <a href="/history" class="text-gray-400 hover:text-white text-sm transition-colors">history</a>
+      <!-- tasks + approvals sub -->
+      <div class="dd flex items-center" id="dd-tasks">
+        <a href="/" class="text-sm text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">tasks</a>
+        <button onclick="toggleDD('dd-tasks')" class="text-[var(--tx-4)] hover:text-[var(--brand)] text-xs ml-0.5 px-0.5 leading-none transition-colors">▾</button>
+        <div class="dd-menu">
+          <a href="/approvals" class="dd-item">approvals</a>
+        </div>
+      </div>
+
+      <!-- history + audit sub -->
+      <div class="dd flex items-center" id="dd-history">
+        <a href="/history" class="text-sm text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">history</a>
+        <button onclick="toggleDD('dd-history')" class="text-[var(--tx-4)] hover:text-[var(--brand)] text-xs ml-0.5 px-0.5 leading-none transition-colors">▾</button>
+        <div class="dd-menu">
+          <a href="/audit" class="dd-item">audit</a>
+        </div>
+      </div>
+
       {% if role == 'admin' %}
-      <a href="/admin/users" class="text-gray-400 hover:text-white text-sm transition-colors">users</a>
-      <a href="/admin/settings" class="text-gray-400 hover:text-white text-sm transition-colors">settings</a>
+      <!-- admin dropdown -->
+      <div class="dd" id="dd-admin">
+        <button onclick="toggleDD('dd-admin')"
+                class="flex items-center gap-0.5 text-sm text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">
+          admin <span class="text-xs">▾</span>
+        </button>
+        <div class="dd-menu">
+          <a href="/admin/users"    class="dd-item">users</a>
+          <a href="/admin/settings" class="dd-item">settings</a>
+          <div class="dd-sep"></div>
+          <a href="/docs"           class="dd-item">api docs</a>
+        </div>
+      </div>
       {% endif %}
-      <a href="/docs" class="text-gray-400 hover:text-white text-sm transition-colors">api</a>
       {% endif %}
     </div>
+
+    <!-- Right: user dropdown + divider + logout -->
     {% if user %}
-    <div class="text-sm text-gray-400 flex items-center gap-2">
-      <span class="text-gray-300">{{ user }}</span>
-      {% if role %}
-      <span class="text-xs px-1.5 py-0.5 rounded
-        {% if role == 'admin' %}bg-gray-700 text-gray-300{% else %}bg-gray-800 text-gray-500{% endif %}">
-        {{ role }}
-      </span>
-      {% endif %}
-      &nbsp;·&nbsp;
-      <a href="/logout" class="hover:text-white transition-colors">logout</a>
+    <div class="flex items-center gap-2 text-sm">
+      <!-- user dropdown -->
+      <div class="dd" id="dd-user">
+        <button onclick="toggleDD('dd-user')"
+                class="flex items-center gap-1.5 text-[var(--tx-2)] hover:text-[var(--tx-1)] transition-colors">
+          <span>{{ user }}</span>
+          {% if role %}
+          <span class="text-xs px-1.5 py-0.5 rounded border brand-border-dim
+            {% if role == 'admin' %}text-[var(--brand)]{% else %}border-[var(--border-in)] text-[var(--tx-4)]{% endif %}">
+            {{ role }}
+          </span>
+          {% endif %}
+          <span class="text-xs text-[var(--tx-4)]">▾</span>
+        </button>
+        <div class="dd-menu right">
+          <button onclick="toggleTheme()" class="dd-item">
+            <span id="theme-icon"></span><span id="theme-label">Toggle theme</span>
+          </button>
+        </div>
+      </div>
+
+      <span class="text-[var(--border-in)] select-none font-bold">·</span>
+      <a href="/logout" class="text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">logout</a>
     </div>
     {% endif %}
   </nav>
+
   <main class="max-w-5xl mx-auto px-4 py-8">
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    function toggleDD(id) {
+      var el = document.getElementById(id);
+      var wasOpen = el.classList.contains('open');
+      document.querySelectorAll('.dd').forEach(function(d) { d.classList.remove('open'); });
+      if (!wasOpen) el.classList.add('open');
+    }
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.dd')) {
+        document.querySelectorAll('.dd').forEach(function(d) { d.classList.remove('open'); });
+      }
+    });
+
+    function applyTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      var icon  = document.getElementById('theme-icon');
+      var label = document.getElementById('theme-label');
+      if (icon)  icon.textContent  = t === 'dark' ? '☀ ' : '☾ ';
+      if (label) label.textContent = t === 'dark' ? 'Light mode' : 'Dark mode';
+      ['nav-logo', 'login-logo'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.src = '/static/img/tack-ai-logo-' + t + '.png';
+      });
+    }
+    function toggleTheme() {
+      var next = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', next);
+      applyTheme(next);
+      document.querySelectorAll('.dd').forEach(function(d) { d.classList.remove('open'); });
+    }
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  </script>
 </body>
 </html>
