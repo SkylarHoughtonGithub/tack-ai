@@ -18,7 +18,15 @@ from tack_ai import audit
 from tack_ai.audit import append, current_run_id
 from tack_ai.core.config import Settings
 from tack_ai.core.models import AuditRecord
-from tack_ai.core.router import ExecutionPath, LLMRouter, Route, RuleBasedRouter, build_model, load_model_config, make_run_settings
+from tack_ai.core.router import (
+    ExecutionPath,
+    LLMRouter,
+    Route,
+    RuleBasedRouter,
+    build_model,
+    load_model_config,
+    make_run_settings,
+)
 from tack_ai.memory import ConversationMemory
 from tack_ai.memory.retrieval import format_for_prompt
 from tack_ai.memory.retrieval import search_documents as _search_documents
@@ -26,7 +34,7 @@ from tack_ai.observability import (
     configure_logging,
     get_logger,
 )
-from tack_ai.policy import enforce
+from tack_ai.policy import PolicyEnforcementCapability
 
 _LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 _LOG_JSON = os.environ.get("LOG_JSON", "true").lower() not in ("0", "false", "no")
@@ -94,6 +102,7 @@ agent: Agent[None, ResearchAnswer] = Agent(
         f"{_UNTRUSTED_WARNING}"
     ),
     toolsets=_mcp_servers or None,
+    capabilities=[PolicyEnforcementCapability()],
 )
 
 
@@ -212,10 +221,6 @@ if settings.brave_api_key:
         """Search the web for current information on a topic."""
         from pydantic_ai.exceptions import ToolFailed  # noqa: PLC0415
 
-        ok, reason = await enforce("web_search", {"query": query})
-        if not ok:
-            log.info("tool web_search(%r) → denied by policy: %s", query[:80], reason)
-            raise ToolFailed(f"web_search denied by policy: {reason}")
         # Real Brave search call would go here
         log.info("tool web_search(%r) → BRAVE_API_KEY set but search not implemented", query[:80])
         raise ToolFailed("web_search backend not fully implemented yet.")
@@ -224,9 +229,6 @@ if settings.brave_api_key:
 @agent.tool_plain
 async def read_file(filename: str) -> str:
     """Read a file from the project folder. Only files within the project are accessible."""
-    ok, reason = await enforce("read_file", {"filename": filename})
-    if not ok:
-        return f"Error: {reason}."
     target = (PROJECT_ROOT / filename).resolve()
     if not str(target).startswith(str(PROJECT_ROOT)):
         return "Error: access outside the project folder is not allowed."
@@ -238,9 +240,6 @@ async def read_file(filename: str) -> str:
 @agent.tool_plain
 async def write_file(path: str, content: str) -> str:
     """Write content to a file. Paths inside drafts/ are allowed; others require approval."""
-    ok, reason = await enforce("write_file", {"path": path})
-    if not ok:
-        return f"Error: {reason}."
     target = (PROJECT_ROOT / path).resolve()
     if not str(target).startswith(str(PROJECT_ROOT)):
         return "Error: access outside the project folder is not allowed."
@@ -258,9 +257,6 @@ async def write_file(path: str, content: str) -> str:
 @agent.tool_plain
 async def run_code(code: str, language: str = "python") -> str:
     """Run code in a Docker sandbox (no network, read-only FS). Always requires approval."""
-    ok, reason = await enforce("run_code", {"language": language, "code": code})
-    if not ok:
-        return f"Error: {reason}."
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _run_in_docker, code, language)
 
@@ -268,18 +264,12 @@ async def run_code(code: str, language: str = "python") -> str:
 @agent.tool_plain
 async def draft_email(to: str, subject: str, body: str) -> str:
     """Draft an email without sending it."""
-    ok, reason = await enforce("draft_email", {"to": to, "subject": subject})
-    if not ok:
-        return f"Error: {reason}."
     return f"[draft] To: {to}\nSubject: {subject}\n\n{body}"
 
 
 @agent.tool_plain
 async def send_email(to: str, subject: str, body: str) -> str:
     """Send an email. Always requires approval."""
-    ok, reason = await enforce("send_email", {"to": to, "subject": subject})
-    if not ok:
-        return f"Error: {reason}."
     # Idempotency guard: identical (to, subject, body) tuples never send twice,
     # even if a crash causes the step to be retried.
     if settings.database_url:
@@ -292,19 +282,12 @@ async def send_email(to: str, subject: str, body: str) -> str:
 @agent.tool_plain
 async def delete_file(path: str) -> str:
     """Delete a file. This operation is never permitted."""
-    ok, reason = await enforce("delete_file", {"path": path})
-    if not ok:
-        return f"Error: {reason}."
     return "Deleted."  # unreachable — policy always denies
 
 
 @agent.tool_plain
 async def search_documents(query: str, user: str = "user") -> str:
     """Search the indexed document store and return the most relevant passages."""
-    ok, reason = await enforce("search_documents", {"query": query[:80]})
-    if not ok:
-        return f"Error: {reason}."
-
     if not settings.database_url or not settings.openai_api_key:
         from pydantic_ai.exceptions import ToolFailed  # noqa: PLC0415
 
@@ -387,8 +370,6 @@ def _log_route(question: str, route: Route, model_str: str, cost_usd: float) -> 
 async def run(question: str) -> None:
     run_id = str(uuid.uuid4())
     current_run_id.set(run_id)
-
-    model_config = load_model_config()
 
     # 1. Route
     router_model_str = _model_config["router"]["decision"]

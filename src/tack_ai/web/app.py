@@ -52,7 +52,7 @@ from tack_ai.audit import append, query_records, verify_chain
 from tack_ai.core.config import Settings
 from tack_ai.core.models import AuditRecord, PolicyDecision
 from tack_ai.observability import configure_logging, configure_tracing, get_logger, tasks_total
-from tack_ai.policy import _approval_override
+from tack_ai.policy import _approval_override, reload_policy_version
 from tack_ai.web.auth import UserManager, ensure_fga_client, get_fga_client
 
 _LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -1062,9 +1062,11 @@ async def admin_delete_user(
 @app.get("/admin/settings")
 async def admin_settings(request: Request, user: str = Depends(_require_admin)) -> Response:
     from tack_ai.core.router import load_model_config  # noqa: PLC0415
+    from tack_ai.policy.engine import get_policy_version  # noqa: PLC0415
 
     base_config = load_model_config()
     effective = _effective_model_config()
+    policy_version = await get_policy_version()
     return templates.TemplateResponse(
         request,
         "admin_settings.html",
@@ -1077,6 +1079,9 @@ async def admin_settings(request: Request, user: str = Depends(_require_admin)) 
             "base_tiers": base_config.get("tiers", {}),
             "overrides": _runtime.get("model_overrides", {}),
             "router_decision": effective.get("router", {}).get("decision", ""),
+            "policy_engine": settings.policy_engine,
+            "opa_url": settings.opa_url,
+            "policy_version": policy_version,
             "success": request.query_params.get("success"),
             "error": request.query_params.get("error"),
         },
@@ -1126,6 +1131,16 @@ async def admin_settings_reset(
     _runtime.clear()
     if _RUNTIME_SETTINGS_PATH.exists():
         _RUNTIME_SETTINGS_PATH.unlink()
+    return RedirectResponse("/admin/settings?success=1", status_code=303)
+
+
+@app.post("/admin/policy/reload")
+async def admin_policy_reload(
+    request: Request,
+    user: str = Depends(_require_admin),
+) -> Response:
+    """Invalidate the cached policy version so the next request re-fetches from OPA."""
+    reload_policy_version()
     return RedirectResponse("/admin/settings?success=1", status_code=303)
 
 

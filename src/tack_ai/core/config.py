@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     # "opa"   — all decisions through OPA (default)
     # "cedar" — tool-authorization through Cedar; routing/budget still through OPA
     policy_engine: str = "opa"
+    opa_url: str = "http://localhost:8181"
+    cedar_policy_path: str = "cedar/"
 
     # P2 — OIDC / SSO (optional; username/password works without these)
     oidc_client_id: str | None = None

@@ -103,5 +103,31 @@
       </button>
     </div>
   </form>
+
+  <!-- Policy engine -->
+  <div class="mt-8 border border-[var(--border)] rounded-lg p-4">
+    <h2 class="text-sm font-medium text-[var(--tx-2)] mb-3">Policy Engine</h2>
+    <div class="space-y-2 text-sm">
+      <div class="flex items-center gap-3">
+        <span class="text-[var(--tx-4)] w-36">Active engine</span>
+        <code class="bg-[var(--bg-input)] border border-[var(--border-in)] px-2 py-0.5 rounded text-[var(--tx-1)] font-mono">{{ policy_engine }}</code>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-[var(--tx-4)] w-36">OPA URL</span>
+        <code class="bg-[var(--bg-input)] border border-[var(--border-in)] px-2 py-0.5 rounded text-[var(--tx-3)] font-mono text-xs">{{ opa_url }}</code>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-[var(--tx-4)] w-36">Bundle version</span>
+        <code class="bg-[var(--bg-input)] border border-[var(--border-in)] px-2 py-0.5 rounded text-[var(--tx-3)] font-mono text-xs">{{ policy_version }}</code>
+      </div>
+    </div>
+    <form method="post" action="/admin/policy/reload" class="mt-4">
+      <button type="submit"
+        class="text-xs border border-[var(--border-in)] hover:border-[var(--brand)] text-[var(--tx-3)] hover:text-[var(--brand)] px-3 py-1 rounded transition-colors">
+        Reload policy bundle
+      </button>
+      <span class="text-xs text-[var(--tx-4)] ml-2">Invalidates the cached OPA version; next request re-fetches.</span>
+    </form>
+  </div>
 </div>
 {% endblock %}

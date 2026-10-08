@@ -48,6 +48,7 @@ class AuditRecord(BaseModel):
     # Policy
     policy_decision: PolicyDecision | None = None
     policy_version: str | None = None
+    policy_rule: str | None = None
     # Approval
     approver: str | None = None
     approved_at: datetime | None = None
