@@ -67,7 +67,9 @@ if _TEMPORAL_AVAILABLE:
 
         if settings.router_type == "llm" and settings.openai_api_key:
             try:
-                route = await LLMRouter(model_str="gpt-4o-mini", openai_api_key=settings.get_key("openai")).route(question)
+                route = await LLMRouter(
+                    model_str="gpt-4o-mini", openai_api_key=settings.get_key("openai")
+                ).route(question)
             except Exception:
                 route = RuleBasedRouter().route(question)
         else:
