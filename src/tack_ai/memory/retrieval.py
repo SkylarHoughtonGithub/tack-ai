@@ -79,7 +79,5 @@ def format_for_prompt(results: list[dict]) -> str:
         return "No relevant documents found."
     parts = []
     for r in results:
-        parts.append(
-            f"[Source: {r['origin']}  score={r['score']}]\n{r['content']}"
-        )
+        parts.append(f"[Source: {r['origin']}  score={r['score']}]\n{r['content']}")
     return "\n\n---\n\n".join(parts)

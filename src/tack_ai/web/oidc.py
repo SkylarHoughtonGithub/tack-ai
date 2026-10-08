@@ -43,9 +43,7 @@ OIDC_REDIRECT_BASE = os.environ.get("OIDC_REDIRECT_BASE", "http://localhost:8000
 OIDC_DISCOVERY_URL = os.environ.get("OIDC_DISCOVERY_URL", "")
 OIDC_DEFAULT_ROLE = os.environ.get("OIDC_DEFAULT_ROLE", "viewer")
 _ADMIN_EMAILS = {
-    e.strip().lower()
-    for e in os.environ.get("OIDC_ADMIN_EMAILS", "").split(",")
-    if e.strip()
+    e.strip().lower() for e in os.environ.get("OIDC_ADMIN_EMAILS", "").split(",") if e.strip()
 }
 
 OIDC_ENABLED = bool(OIDC_CLIENT_ID and OIDC_CLIENT_SECRET)
@@ -106,10 +104,12 @@ async def _get_provider_meta() -> dict[str, str]:
 
 # ── Authorization URL ─────────────────────────────────────────────────────────
 
+
 async def get_authorization_url(state: str) -> str:
     """Return the provider's authorization URL to redirect the user to."""
     meta = await _get_provider_meta()
     import urllib.parse  # noqa: PLC0415
+
     params = {
         "client_id": OIDC_CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
@@ -123,6 +123,7 @@ async def get_authorization_url(state: str) -> str:
 
 
 # ── Token exchange ────────────────────────────────────────────────────────────
+
 
 async def exchange_code(code: str) -> dict[str, Any]:
     """Exchange an authorization code for tokens. Returns the token response dict."""
@@ -144,6 +145,7 @@ async def exchange_code(code: str) -> dict[str, Any]:
 
 
 # ── User info ─────────────────────────────────────────────────────────────────
+
 
 async def get_userinfo(access_token: str) -> dict[str, Any]:
     """Fetch user profile from the provider's userinfo endpoint."""
@@ -177,6 +179,7 @@ async def get_github_primary_email(access_token: str) -> str | None:
 
 # ── Identity resolution ───────────────────────────────────────────────────────
 
+
 async def resolve_identity(code: str) -> tuple[str, str]:
     """
     Complete the OIDC flow and return (username, role).
@@ -187,7 +190,9 @@ async def resolve_identity(code: str) -> tuple[str, str]:
     meta = await _get_provider_meta()
     tokens = await exchange_code(code)
     if "error" in tokens:
-        raise RuntimeError(f"Token exchange failed: {tokens.get('error_description', tokens['error'])}")
+        raise RuntimeError(
+            f"Token exchange failed: {tokens.get('error_description', tokens['error'])}"
+        )
 
     access_token = tokens.get("access_token", "")
     userinfo = await get_userinfo(access_token)

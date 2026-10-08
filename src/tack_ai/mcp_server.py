@@ -8,6 +8,7 @@ Run (stdio, for Claude Desktop):
 Run (SSE, for programmatic clients):
     uv run python -m tack_ai.mcp_server --sse
 """
+
 from __future__ import annotations
 
 import sys

@@ -44,6 +44,7 @@ settings = Settings()
 # ── DBOS availability ──────────────────────────────────────────────────────────
 try:
     from dbos import DBOS, DBOSConfig, SetWorkflowID
+
     _DBOS_AVAILABLE = True
 except ImportError:
     _DBOS_AVAILABLE = False
@@ -66,9 +67,7 @@ def _init_dbos() -> None:
         return
 
     if not _DBOS_AVAILABLE:
-        raise RuntimeError(
-            "dbos package not installed.  Run: uv add dbos 'pydantic-ai[dbos]'"
-        )
+        raise RuntimeError("dbos package not installed.  Run: uv add dbos 'pydantic-ai[dbos]'")
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is required for durable mode.")
 
@@ -123,6 +122,7 @@ def _init_dbos() -> None:
 
 # ── DB-backed approval (called by policy.py in durable mode) ──────────────────
 
+
 def _approval_id(run_id: str, tool_name: str) -> str:
     return hashlib.sha256(f"{run_id}:{tool_name}".encode()).hexdigest()[:16]
 
@@ -154,14 +154,14 @@ async def wait_for_db_approval(
         )
         await conn.commit()
 
-    print(f"\n{'─'*54}")
+    print(f"\n{'─' * 54}")
     print("  DURABLE APPROVAL REQUIRED")
     print(f"  Tool:        {tool_name}")
     print(f"  Approval ID: {approval_id}")
     print(f"  Run ID:      {run_id}")
     print(f"  Approve:  uv run python scripts/send_approval.py {approval_id} --approve")
     print(f"  Deny:     uv run python scripts/send_approval.py {approval_id} --deny")
-    print(f"{'─'*54}")
+    print(f"{'─' * 54}")
 
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -196,6 +196,7 @@ async def wait_for_db_approval(
 
 
 # ── Idempotent email (called by agent.py's send_email tool) ───────────────────
+
 
 def _email_key(to: str, subject: str, body: str) -> str:
     return hashlib.sha256(f"{to}\0{subject}\0{body}".encode()).hexdigest()[:16]
@@ -238,6 +239,7 @@ async def check_or_record_email(to: str, subject: str, body: str) -> str:
 
 # ── Public entry point ─────────────────────────────────────────────────────────
 
+
 async def run_durable(question: str, workflow_id: str | None = None) -> None:
     """Start or resume a durable agent run.
 
@@ -262,15 +264,17 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     print(f"Route:    {route.tier.value} | {route.reason}")
     print("Durable:  yes (DBOS → Postgres)")
 
-    append(AuditRecord(
-        run_id=run_id,
-        actor="user",
-        event_type="routing",
-        routing_tier=route.tier.value,
-        routing_reason=route.reason,
-        model="anthropic:claude-sonnet-4-6",
-        provider="anthropic",
-    ))
+    append(
+        AuditRecord(
+            run_id=run_id,
+            actor="user",
+            event_type="routing",
+            routing_tier=route.tier.value,
+            routing_reason=route.reason,
+            model="anthropic:claude-sonnet-4-6",
+            provider="anthropic",
+        )
+    )
 
     # SetWorkflowID scopes the next start_workflow_async call.
     # workflow_id_reuse_policy='return-existing' means: if this workflow ID
@@ -285,21 +289,20 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     print(f"Sources:    {result_dict.get('sources', [])}")
     print(f"Confidence: {result_dict.get('confidence', 0):.2f}")
 
-    append(AuditRecord(
-        run_id=run_id,
-        actor="user",
-        event_type="outcome",
-        model="anthropic:claude-sonnet-4-6",
-        provider="anthropic",
-        outcome=result_dict["summary"][:200],
-    ))
+    append(
+        AuditRecord(
+            run_id=run_id,
+            actor="user",
+            event_type="outcome",
+            model="anthropic:claude-sonnet-4-6",
+            provider="anthropic",
+            outcome=result_dict["summary"][:200],
+        )
+    )
 
     ok, msg = verify_chain()
     print("\n=== Audit ===")
     print(f"Chain: {'✓' if ok else '✗'}  {msg}")
-    print(
-        f"Replay: uv run python -c "
-        f"\"from tack_ai.audit import replay; replay('{run_id}')\""
-    )
+    print(f"Replay: uv run python -c \"from tack_ai.audit import replay; replay('{run_id}')\"")
 
     DBOS.destroy()

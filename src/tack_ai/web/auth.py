@@ -40,6 +40,7 @@ def _write_fga_ids_to_env(store_id: str, model_id: str) -> None:
     os.environ["OPENFGA_STORE_ID"] = store_id
     os.environ["OPENFGA_MODEL_ID"] = model_id
 
+
 _client: FGAClient | None = None
 
 _FGA_MODEL = WriteAuthorizationModelRequest(
@@ -50,9 +51,7 @@ _FGA_MODEL = WriteAuthorizationModelRequest(
             type="tool",
             relations={"executor": Userset(this={})},
             metadata={
-                "relations": {
-                    "executor": {"directly_related_user_types": [{"type": "run"}]}
-                }
+                "relations": {"executor": {"directly_related_user_types": [{"type": "run"}]}}
             },
         ),
     ],
@@ -79,6 +78,7 @@ async def ensure_fga_client() -> FGAClient | None:
         return _client
 
     from tack_ai.core.config import Settings
+
     s = Settings()
     if not s.openfga_url:
         return None
@@ -89,8 +89,9 @@ async def ensure_fga_client() -> FGAClient | None:
     if store_id and model_id:
         # Validate that the model still exists (fails after an in-memory restart).
         try:
-            cfg = ClientConfiguration(api_url=s.openfga_url, store_id=store_id,
-                                      authorization_model_id=model_id)
+            cfg = ClientConfiguration(
+                api_url=s.openfga_url, store_id=store_id, authorization_model_id=model_id
+            )
             async with OpenFgaClient(cfg) as c:
                 await c.read_authorization_model()
         except Exception:
@@ -102,7 +103,9 @@ async def ensure_fga_client() -> FGAClient | None:
         try:
             store_id, model_id = await _seed_fga(s.openfga_url)
             _write_fga_ids_to_env(store_id, model_id)
-            print(f"\n[FGA] Auto-seeded and .env updated: OPENFGA_STORE_ID={store_id}  OPENFGA_MODEL_ID={model_id}\n")
+            print(
+                f"\n[FGA] Auto-seeded and .env updated: OPENFGA_STORE_ID={store_id}  OPENFGA_MODEL_ID={model_id}\n"
+            )
         except Exception as e:
             print(f"\n[FGA] Could not seed store ({e}) — FGA disabled.")
             return None
@@ -126,23 +129,35 @@ class FGAClient:
 
     async def grant_tool(self, run_id: str, tool_name: str) -> None:
         async with OpenFgaClient(self._config) as client:
-            await client.write(body=ClientWriteRequest(writes=[
-                ClientTuple(user=f"run:{run_id}", relation="executor", object=f"tool:{tool_name}"),
-            ]))
+            await client.write(
+                body=ClientWriteRequest(
+                    writes=[
+                        ClientTuple(
+                            user=f"run:{run_id}", relation="executor", object=f"tool:{tool_name}"
+                        ),
+                    ]
+                )
+            )
 
     async def revoke_tool(self, run_id: str, tool_name: str) -> None:
         async with OpenFgaClient(self._config) as client:
-            await client.delete_tuples(body=[
-                ClientTuple(user=f"run:{run_id}", relation="executor", object=f"tool:{tool_name}"),
-            ])
+            await client.delete_tuples(
+                body=[
+                    ClientTuple(
+                        user=f"run:{run_id}", relation="executor", object=f"tool:{tool_name}"
+                    ),
+                ]
+            )
 
     async def can_execute(self, run_id: str, tool_name: str) -> bool:
         async with OpenFgaClient(self._config) as client:
-            resp = await client.check(ClientCheckRequest(
-                user=f"run:{run_id}",
-                relation="executor",
-                object=f"tool:{tool_name}",
-            ))
+            resp = await client.check(
+                ClientCheckRequest(
+                    user=f"run:{run_id}",
+                    relation="executor",
+                    object=f"tool:{tool_name}",
+                )
+            )
             return bool(resp.allowed)
 
 
@@ -180,6 +195,7 @@ class UserManager:
             raise RuntimeError("DATABASE_URL is required for user management")
         pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         import psycopg  # noqa: PLC0415
+
         async with await psycopg.AsyncConnection.connect(self._db_url) as conn:
             await conn.execute(
                 "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s) "
@@ -194,6 +210,7 @@ class UserManager:
         try:
             import psycopg  # noqa: PLC0415
             from psycopg.rows import dict_row  # noqa: PLC0415
+
             async with await psycopg.AsyncConnection.connect(self._db_url) as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(
@@ -210,6 +227,7 @@ class UserManager:
         if not self._db_url:
             raise RuntimeError("DATABASE_URL is required for user management")
         import psycopg  # noqa: PLC0415
+
         async with await psycopg.AsyncConnection.connect(self._db_url) as conn:
             await conn.execute("DELETE FROM users WHERE username = %s", (username,))
             await conn.commit()
@@ -217,6 +235,7 @@ class UserManager:
     async def _fetch_user(self, username: str) -> dict | None:
         import psycopg  # noqa: PLC0415
         from psycopg.rows import dict_row  # noqa: PLC0415
+
         async with await psycopg.AsyncConnection.connect(self._db_url) as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 await cur.execute(

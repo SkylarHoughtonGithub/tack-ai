@@ -18,8 +18,8 @@ from tack_ai.memory.sources import DocumentSource
 
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIMS = 1536
-CHUNK_SIZE = 800      # characters
-CHUNK_OVERLAP = 100   # characters
+CHUNK_SIZE = 800  # characters
+CHUNK_OVERLAP = 100  # characters
 
 
 @dataclass
@@ -123,8 +123,12 @@ async def ingest_source(
                                     ingested_at  = NOW()
                             """,
                             (
-                                chunk.source_id, chunk.source_type, chunk.origin,
-                                chunk.chunk_index, chunk.content, chunk.content_hash,
+                                chunk.source_id,
+                                chunk.source_type,
+                                chunk.origin,
+                                chunk.chunk_index,
+                                chunk.content,
+                                chunk.content_hash,
                                 vec,
                             ),
                         )

@@ -45,6 +45,7 @@ try:
     from temporalio.client import Client
     from temporalio.common import RetryPolicy
     from temporalio.worker import Worker
+
     _TEMPORAL_AVAILABLE = True
 except ImportError:
     _TEMPORAL_AVAILABLE = False
@@ -97,6 +98,7 @@ if _TEMPORAL_AVAILABLE:
     @dataclass
     class ApprovalState:
         """Mutable state updated via signals from outside the workflow."""
+
         pending_tool: str | None = None
         decisions: dict[str, bool] = field(default_factory=dict)
 
@@ -176,6 +178,7 @@ if _TEMPORAL_AVAILABLE:
 
 
 # ── Worker and client helpers ─────────────────────────────────────────────────
+
 
 async def run_worker(temporal_host: str = "localhost:7233") -> None:
     """Run the Temporal worker.  Must be running for workflows to execute."""

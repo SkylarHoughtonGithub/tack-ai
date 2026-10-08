@@ -56,6 +56,7 @@ task_duration_seconds = Histogram(
 
 # ── OpenTelemetry tracing ─────────────────────────────────────────────────────
 
+
 def configure_tracing() -> None:
     """
     Set up an OTLP-HTTP TracerProvider.
@@ -89,9 +90,8 @@ def get_tracer(name: str) -> trace.Tracer:
 
 # ── Structlog processor: inject OTEL trace/span IDs ──────────────────────────
 
-def _inject_trace_context(
-    logger: object, method_name: str, event_dict: dict
-) -> dict:
+
+def _inject_trace_context(logger: object, method_name: str, event_dict: dict) -> dict:
     """
     Add trace_id and span_id to every log record emitted inside an active span.
 
@@ -108,6 +108,7 @@ def _inject_trace_context(
 
 
 # ── Structlog setup ───────────────────────────────────────────────────────────
+
 
 def configure_logging(json: bool = True, level: str = "INFO") -> None:
     """Configure structlog with JSON output and OTEL trace context injection."""

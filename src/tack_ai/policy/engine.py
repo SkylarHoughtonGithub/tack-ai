@@ -17,9 +17,9 @@ durable_mode: ContextVar[bool] = ContextVar("durable_mode", default=False)
 
 # Web-mode override: when set, request_approval calls this instead of the
 # terminal prompt or DB polling.  Set per-task in web.py's background runner.
-_approval_override: ContextVar[
-    Callable[[str, dict[str, Any]], Awaitable[bool]] | None
-] = ContextVar("_approval_override", default=None)
+_approval_override: ContextVar[Callable[[str, dict[str, Any]], Awaitable[bool]] | None] = (
+    ContextVar("_approval_override", default=None)
+)
 
 OPA_URL = "http://localhost:8181"
 _DECISION_PATH = "/v1/data/tack/policy/decision"
@@ -60,6 +60,7 @@ async def policy_check(
 
     if settings.policy_engine == "cedar" and tool_name != "__route__":
         from cedar.cedar_policy import cedar_decide
+
         decision = cedar_decide(tool_name, args, {"prior_tool": prior or ""})
         if run_id:
             _prior_tool[run_id] = tool_name
@@ -107,15 +108,16 @@ async def request_approval(tool_name: str, args: dict) -> bool:
         # Lazy import to avoid circular dependency at module load time.
         from tack_ai.audit import current_run_id
         from tack_ai.durable import wait_for_db_approval
+
         run_id = current_run_id.get()
         return await wait_for_db_approval(run_id, tool_name, args)
 
-    print(f"\n{'─'*50}")
+    print(f"\n{'─' * 50}")
     print("  APPROVAL REQUIRED")
     print(f"  Tool: {tool_name}")
     for k, v in args.items():
         print(f"  {k}: {v}")
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     loop = asyncio.get_event_loop()
     answer = await loop.run_in_executor(None, lambda: input("  Approve? [y/N]: "))
     approved = answer.strip().lower() == "y"
@@ -135,6 +137,7 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
     # the FGA tuple from the approvals page will force re-approval on the next call.
     if run_id and _approval_override.get() is not None:
         from tack_ai.web.auth import get_fga_client  # noqa: PLC0415
+
         fga = get_fga_client()
         if fga is not None:
             try:
@@ -171,17 +174,19 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
         tool_calls_total.labels(tool_name=tool_name, outcome="unknown").inc()
 
     if run_id:
-        await append(AuditRecord(
-            run_id=run_id,
-            actor=user,
-            event_type="policy_decision",
-            tool_name=tool_name,
-            tool_args=redact_args(args),
-            policy_decision=decision,
-            policy_version=version,
-            approver=approver,
-            approved_at=approved_at,
-            outcome="executed" if ok else "blocked",
-        ))
+        await append(
+            AuditRecord(
+                run_id=run_id,
+                actor=user,
+                event_type="policy_decision",
+                tool_name=tool_name,
+                tool_args=redact_args(args),
+                policy_decision=decision,
+                policy_version=version,
+                approver=approver,
+                approved_at=approved_at,
+                outcome="executed" if ok else "blocked",
+            )
+        )
 
     return ok, reason

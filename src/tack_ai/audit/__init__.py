@@ -1,4 +1,5 @@
 """Append-only, hash-chained audit trail backed by Postgres."""
+
 from tack_ai.audit.core import (
     append,
     current_run_id,

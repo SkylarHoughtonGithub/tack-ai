@@ -1,4 +1,5 @@
 """Audit trail — append-only, hash-chained, stored in Postgres."""
+
 import hashlib
 import json
 import re
@@ -40,29 +41,30 @@ def _compute_hash(canonical: str) -> str:
 
 def _row_to_canonical(row: dict) -> str:
     d = {
-        "actor":           row["actor"],
-        "approved_at":     row["approved_at"],
-        "approver":        row["approver"],
-        "cost_usd":        row["cost_usd"],
-        "event_type":      row["event_type"],
-        "model":           row["model"],
-        "outcome":         row["outcome"],
+        "actor": row["actor"],
+        "approved_at": row["approved_at"],
+        "approver": row["approver"],
+        "cost_usd": row["cost_usd"],
+        "event_type": row["event_type"],
+        "model": row["model"],
+        "outcome": row["outcome"],
         "policy_decision": row["policy_decision"],
-        "policy_version":  row["policy_version"],
-        "prev_hash":       row["prev_hash"],
-        "provider":        row["provider"],
-        "routing_reason":  row["routing_reason"],
-        "routing_tier":    row["routing_tier"],
-        "run_id":          row["run_id"],
-        "timestamp":       row["timestamp"],
-        "tool_args":       json.loads(row["tool_args"]) if row["tool_args"] else None,
-        "tool_name":       row["tool_name"],
+        "policy_version": row["policy_version"],
+        "prev_hash": row["prev_hash"],
+        "provider": row["provider"],
+        "routing_reason": row["routing_reason"],
+        "routing_tier": row["routing_tier"],
+        "run_id": row["run_id"],
+        "timestamp": row["timestamp"],
+        "tool_args": json.loads(row["tool_args"]) if row["tool_args"] else None,
+        "tool_name": row["tool_name"],
     }
     return json.dumps(d, sort_keys=True)
 
 
 def _db_url() -> str | None:
     from tack_ai.core.config import Settings  # noqa: PLC0415
+
     return Settings().database_url
 
 
@@ -91,15 +93,23 @@ async def append(record: AuditRecord) -> AuditRecord:
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
-                    d["run_id"], d["actor"], d["event_type"],
-                    d["routing_tier"], d["routing_reason"],
-                    d["model"], d["provider"],
+                    d["run_id"],
+                    d["actor"],
+                    d["event_type"],
+                    d["routing_tier"],
+                    d["routing_reason"],
+                    d["model"],
+                    d["provider"],
                     d["tool_name"],
                     json.dumps(d["tool_args"]) if d["tool_args"] is not None else None,
-                    d["policy_decision"], d["policy_version"],
-                    d["approver"], d["approved_at"],
-                    d["outcome"], d["cost_usd"],
-                    d["prev_hash"], d["hash"],
+                    d["policy_decision"],
+                    d["policy_version"],
+                    d["approver"],
+                    d["approved_at"],
+                    d["outcome"],
+                    d["cost_usd"],
+                    d["prev_hash"],
+                    d["hash"],
                     d["timestamp"],
                 ),
             )
@@ -184,9 +194,7 @@ async def query_records(
                 )
                 records = [dict(r) for r in await cur.fetchall()]
 
-                await cur.execute(
-                    f"SELECT COUNT(*) AS cnt FROM audit_log {where}", params
-                )
+                await cur.execute(f"SELECT COUNT(*) AS cnt FROM audit_log {where}", params)
                 row = await cur.fetchone()
                 total = row["cnt"] if row else 0
         return records, total
@@ -202,9 +210,7 @@ async def replay(run_id: str) -> None:
         return
     async with await psycopg.AsyncConnection.connect(url) as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(
-                "SELECT * FROM audit_log WHERE run_id = %s ORDER BY id", (run_id,)
-            )
+            await cur.execute("SELECT * FROM audit_log WHERE run_id = %s ORDER BY id", (run_id,))
             rows = await cur.fetchall()
     if not rows:
         print(f"No records found for run_id={run_id!r}")
@@ -222,7 +228,11 @@ async def replay(run_id: str) -> None:
         if row["tool_name"]:
             print(f"  Tool     {row['tool_name']}")
         if row["tool_args"]:
-            args = json.loads(row["tool_args"]) if isinstance(row["tool_args"], str) else row["tool_args"]
+            args = (
+                json.loads(row["tool_args"])
+                if isinstance(row["tool_args"], str)
+                else row["tool_args"]
+            )
             for k, v in args.items():
                 print(f"    {k}: {v}")
         if row["policy_decision"]:

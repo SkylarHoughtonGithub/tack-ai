@@ -71,6 +71,7 @@ async def lifespan(fastapi_app: FastAPI) -> None:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # noqa: PLC0415
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor  # noqa: PLC0415
     from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor  # noqa: PLC0415
+
     FastAPIInstrumentor.instrument_app(fastapi_app)
     HTTPXClientInstrumentor().instrument()
     PsycopgInstrumentor().instrument()
@@ -109,6 +110,7 @@ def _tojson(v: object, indent: int | None = None) -> Markup:
 templates.env.filters["tojson"] = _tojson
 
 # ── Session store ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class _Session:
@@ -171,6 +173,7 @@ def _get_user_manager() -> UserManager:
 
 
 # ── Run state ─────────────────────────────────────────────────────────────────
+
 
 class RunState:
     def __init__(self, run_id: str, question: str, username: str) -> None:
@@ -246,6 +249,7 @@ def _effective_budget() -> float:
 
 def _effective_model_config() -> dict[str, Any]:
     from tack_ai.core.router import load_model_config  # noqa: PLC0415
+
     base = load_model_config()
     for tier, model in _runtime.get("model_overrides", {}).items():
         if tier in base.get("tiers", {}):
@@ -254,6 +258,7 @@ def _effective_model_config() -> dict[str, Any]:
 
 
 # ── Reasoning trace ───────────────────────────────────────────────────────────
+
 
 def _extract_trace(messages: list[Any]) -> list[dict[str, Any]]:
     """
@@ -266,17 +271,21 @@ def _extract_trace(messages: list[Any]) -> list[dict[str, Any]]:
         for part in msg.parts:
             ptype = part.__class__.__name__
             if ptype == "ToolCallPart":
-                events.append({
-                    "type": "tool_call",
-                    "tool_name": getattr(part, "tool_name", "?"),
-                    "args": str(getattr(part, "args", ""))[:300],
-                })
+                events.append(
+                    {
+                        "type": "tool_call",
+                        "tool_name": getattr(part, "tool_name", "?"),
+                        "args": str(getattr(part, "args", ""))[:300],
+                    }
+                )
             elif ptype == "ToolReturnPart":
-                events.append({
-                    "type": "tool_result",
-                    "tool_name": getattr(part, "tool_name", "?"),
-                    "content": str(getattr(part, "content", ""))[:300],
-                })
+                events.append(
+                    {
+                        "type": "tool_result",
+                        "tool_name": getattr(part, "tool_name", "?"),
+                        "content": str(getattr(part, "content", ""))[:300],
+                    }
+                )
             elif ptype == "ThinkingPart":
                 thinking = str(getattr(part, "thinking", "")).strip()
                 if thinking:
@@ -289,6 +298,7 @@ def _extract_trace(messages: list[Any]) -> list[dict[str, Any]]:
 
 
 # ── Background runner ─────────────────────────────────────────────────────────
+
 
 async def _web_request_approval(
     tool_name: str, args: dict[str, Any], run_id: str, state: RunState
@@ -309,13 +319,15 @@ async def _web_request_approval(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "approver": None,
     }
-    state.push({
-        "type": "approval_required",
-        "approval_id": approval_id,
-        "tool_name": tool_name,
-        "actor": state.username,
-        "args": {k: str(v)[:300] for k, v in args.items()},
-    })
+    state.push(
+        {
+            "type": "approval_required",
+            "approval_id": approval_id,
+            "tool_name": tool_name,
+            "actor": state.username,
+            "args": {k: str(v)[:300] for k, v in args.items()},
+        }
+    )
     await done.wait()
     info = _pending_approvals.pop(approval_id, {})
     return bool(info.get("approved"))
@@ -328,31 +340,37 @@ async def _preflight(state: RunState) -> None:
         async with httpx.AsyncClient(timeout=1.5) as c:
             await c.get("http://localhost:8181/health")
     except Exception:
-        state.push({
-            "type": "warning",
-            "message": (
-                "OPA is not reachable — all tool calls will be denied (fail-closed).\n"
-                "Start it with:  opa run --server --addr :8181 policies/"
-            ),
-        })
+        state.push(
+            {
+                "type": "warning",
+                "message": (
+                    "OPA is not reachable — all tool calls will be denied (fail-closed).\n"
+                    "Start it with:  opa run --server --addr :8181 policies/"
+                ),
+            }
+        )
 
     if not settings.database_url:
-        state.push({
-            "type": "warning",
-            "message": (
-                "DATABASE_URL is not set — document search and conversation memory "
-                "are disabled."
-            ),
-        })
+        state.push(
+            {
+                "type": "warning",
+                "message": (
+                    "DATABASE_URL is not set — document search and conversation memory "
+                    "are disabled."
+                ),
+            }
+        )
 
     if not settings.logfire_token:
-        state.push({
-            "type": "warning",
-            "message": (
-                "LOGFIRE_TOKEN is not set — traces will not be sent to Logfire.\n"
-                "Get a token at https://logfire.pydantic.dev and add it to .env."
-            ),
-        })
+        state.push(
+            {
+                "type": "warning",
+                "message": (
+                    "LOGFIRE_TOKEN is not set — traces will not be sent to Logfire.\n"
+                    "Get a token at https://logfire.pydantic.dev and add it to .env."
+                ),
+            }
+        )
 
 
 async def _run_agent_bg(run_id: str, state: RunState, question: str | None = None) -> None:
@@ -370,9 +388,7 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
     q = question or state.current_question
     turn_idx = state.start_turn(q)
     current_run_id.set(run_id)
-    _approval_override.set(
-        lambda tool, args: _web_request_approval(tool, args, run_id, state)
-    )
+    _approval_override.set(lambda tool, args: _web_request_approval(tool, args, run_id, state))
 
     # Only run preflight on the first turn
     if turn_idx == 0:
@@ -388,33 +404,39 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
                     openai_api_key=settings.get_key("openai"),
                 ).route(q)
             except Exception as e:
-                state.push({
-                    "type": "warning",
-                    "message": f"LLM router unavailable ({e.__class__.__name__}), falling back to rule-based.",
-                })
+                state.push(
+                    {
+                        "type": "warning",
+                        "message": f"LLM router unavailable ({e.__class__.__name__}), falling back to rule-based.",
+                    }
+                )
                 route = RuleBasedRouter().route(q)
         else:
             route = RuleBasedRouter().route(q)
 
         state.tier = route.tier.value
-        state.push({
-            "type": "routing",
-            "tier": route.tier.value,
-            "effort": route.reasoning_effort.value,
-            "reason": route.reason,
-        })
+        state.push(
+            {
+                "type": "routing",
+                "tier": route.tier.value,
+                "effort": route.reasoning_effort.value,
+                "reason": route.reason,
+            }
+        )
         model, model_str = _build_model_with_fallback(route, model_config)
         provider = model_str.split(":")[0]
 
-        await append(AuditRecord(
-            run_id=run_id,
-            actor=state.username,
-            event_type="routing",
-            routing_tier=route.tier.value,
-            routing_reason=route.reason,
-            model=model_str,
-            provider=provider,
-        ))
+        await append(
+            AuditRecord(
+                run_id=run_id,
+                actor=state.username,
+                event_type="routing",
+                routing_tier=route.tier.value,
+                routing_reason=route.reason,
+                model=model_str,
+                provider=provider,
+            )
+        )
 
         memory = _get_memory()
         session_id = state.username  # one memory session per user across all their threads
@@ -423,14 +445,14 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
             try:
                 memory_context = await memory.get_context(session_id)
             except Exception as e:
-                state.push({
-                    "type": "warning",
-                    "message": f"Memory read failed ({e.__class__.__name__}) — running without prior context.",
-                })
+                state.push(
+                    {
+                        "type": "warning",
+                        "message": f"Memory read failed ({e.__class__.__name__}) — running without prior context.",
+                    }
+                )
 
-        full_question = (
-            f"{memory_context}\n\nUser: {q}" if memory_context else q
-        )
+        full_question = f"{memory_context}\n\nUser: {q}" if memory_context else q
 
         state.push({"type": "status", "message": f"Running on {model_str}…"})
 
@@ -451,15 +473,17 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
             partial_msgs = _agent_run.all_messages() if _agent_run else []
             for ev in _extract_trace(partial_msgs):
                 state.push(ev)
-            state.push({
-                "type": "error",
-                "message": (
-                    f"Tool call limit reached ({_USAGE_LIMITS.tool_calls_limit} calls). "
-                    "The model kept calling tools without reaching an answer — "
-                    "see the trace above for the loop pattern. "
-                    "Check that OPA is running and the tools are returning useful data."
-                ),
-            })
+            state.push(
+                {
+                    "type": "error",
+                    "message": (
+                        f"Tool call limit reached ({_USAGE_LIMITS.tool_calls_limit} calls). "
+                        "The model kept calling tools without reaching an answer — "
+                        "see the trace above for the loop pattern. "
+                        "Check that OPA is running and the tools are returning useful data."
+                    ),
+                }
+            )
             state.status = "failed"
             state.push({"type": "done"})
             return
@@ -471,40 +495,46 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
         state.total_cost_usd += cost
         out = run_result.output.model_dump()
 
-        await append(AuditRecord(
-            run_id=run_id,
-            actor=state.username,
-            event_type="outcome",
-            model=model_str,
-            provider=provider,
-            outcome=out["summary"][:200],
-            cost_usd=cost,
-        ))
+        await append(
+            AuditRecord(
+                run_id=run_id,
+                actor=state.username,
+                event_type="outcome",
+                model=model_str,
+                provider=provider,
+                outcome=out["summary"][:200],
+                cost_usd=cost,
+            )
+        )
 
         if memory:
             try:
                 await memory.add_turn(session_id, "user", q)
                 await memory.add_turn(session_id, "assistant", out["summary"])
             except Exception as e:
-                state.push({
-                    "type": "warning",
-                    "message": f"Memory write failed ({e.__class__.__name__}) — turn not saved.",
-                })
+                state.push(
+                    {
+                        "type": "warning",
+                        "message": f"Memory write failed ({e.__class__.__name__}) — turn not saved.",
+                    }
+                )
 
         # Push reasoning trace (tool calls, results, thinking) before the answer
         for trace_event in _extract_trace(run_result.all_messages()):
             state.push(trace_event)
 
-        state.push({
-            "type": "answer",
-            "summary": out["summary"],
-            "sources": out.get("sources", []),
-            "confidence": out.get("confidence", 0),
-            "cost_usd": cost,
-            "input_tokens": run_usage.input_tokens,
-            "output_tokens": run_usage.output_tokens,
-            "turn_index": turn_idx,
-        })
+        state.push(
+            {
+                "type": "answer",
+                "summary": out["summary"],
+                "sources": out.get("sources", []),
+                "confidence": out.get("confidence", 0),
+                "cost_usd": cost,
+                "input_tokens": run_usage.input_tokens,
+                "output_tokens": run_usage.output_tokens,
+                "turn_index": turn_idx,
+            }
+        )
         state.end_turn(out["summary"])
         tasks_total.labels(status="completed").inc()
         # Conversation stays open for follow-up
@@ -519,6 +549,7 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
         msg = str(exc)
         if "All connection attempts failed" in msg or "Client failed to connect" in msg:
             from tack_ai.core.config import Settings as _S  # noqa: PLC0415
+
             cfg = _S()
             if cfg.mcp_gateway_url:
                 msg = (
@@ -534,15 +565,21 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
 
 # ── Auth routes ────────────────────────────────────────────────────────────────
 
+
 @app.get("/login")
 async def login_page(request: Request, error: str = "") -> Response:
     from tack_ai.web.oidc import OIDC_ENABLED, OIDC_PROVIDER  # noqa: PLC0415
-    return templates.TemplateResponse(request, "login.html", {
-        "user": None,
-        "error": error,
-        "oidc_enabled": OIDC_ENABLED,
-        "oidc_provider": OIDC_PROVIDER,
-    })
+
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {
+            "user": None,
+            "error": error,
+            "oidc_enabled": OIDC_ENABLED,
+            "oidc_provider": OIDC_PROVIDER,
+        },
+    )
 
 
 @app.post("/login")
@@ -569,6 +606,7 @@ async def login_post(
 async def oidc_login(request: Request) -> Response:
     """Redirect to the OIDC provider's authorization endpoint."""
     from tack_ai.web.oidc import OIDC_ENABLED, get_authorization_url  # noqa: PLC0415
+
     if not OIDC_ENABLED:
         return RedirectResponse("/login?error=OIDC+not+configured", status_code=303)
     state = secrets.token_urlsafe(16)
@@ -588,6 +626,7 @@ async def oidc_callback(
 ) -> Response:
     """Handle the OIDC provider callback and establish a session."""
     from tack_ai.web.oidc import OIDC_ENABLED, resolve_identity  # noqa: PLC0415
+
     if not OIDC_ENABLED:
         return RedirectResponse("/login?error=OIDC+not+configured", status_code=303)
 
@@ -634,6 +673,7 @@ async def logout(request: Request) -> Response:
 
 # ── Task routes ────────────────────────────────────────────────────────────────
 
+
 @app.get("/")
 async def index(request: Request, user: str = Depends(_auth)) -> Response:
     role = _get_role(request)
@@ -644,26 +684,30 @@ async def index(request: Request, user: str = Depends(_auth)) -> Response:
         if r.tier:
             tier_counts[r.tier] = tier_counts.get(r.tier, 0) + 1
 
-    return templates.TemplateResponse(request, "index.html", {
-        "user": user,
-        "role": role,
-        "stats": {
-            "cost_today": cost_today,
-            "runs_today": len(_runs),
-            "pending": len(_pending_approvals),
-            "tier_counts": tier_counts,
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "user": user,
+            "role": role,
+            "stats": {
+                "cost_today": cost_today,
+                "runs_today": len(_runs),
+                "pending": len(_pending_approvals),
+                "tier_counts": tier_counts,
+            },
+            "recent_runs": [
+                {
+                    "run_id": r.run_id,
+                    "question": r.question[:80],
+                    "tier": r.tier,
+                    "status": r.status,
+                    "cost_usd": r.total_cost_usd or None,
+                }
+                for r in recent
+            ],
         },
-        "recent_runs": [
-            {
-                "run_id": r.run_id,
-                "question": r.question[:80],
-                "tier": r.tier,
-                "status": r.status,
-                "cost_usd": r.total_cost_usd or None,
-            }
-            for r in recent
-        ],
-    })
+    )
 
 
 @app.post("/tasks")
@@ -689,15 +733,19 @@ async def task_detail(run_id: str, request: Request, user: str = Depends(_auth))
         raise HTTPException(status_code=404, detail="Task not found")
     role = _get_role(request)
     completed_turns = [t for t in state.turns if t.get("answer") is not None]
-    return templates.TemplateResponse(request, "task.html", {
-        "user": user,
-        "role": role,
-        "run_id": run_id,
-        "question": state.turns[0]["question"] if state.turns else state.current_question,
-        "status": state.status,
-        "completed_turns": completed_turns,
-        "total_cost_usd": state.total_cost_usd,
-    })
+    return templates.TemplateResponse(
+        request,
+        "task.html",
+        {
+            "user": user,
+            "role": role,
+            "run_id": run_id,
+            "question": state.turns[0]["question"] if state.turns else state.current_question,
+            "status": state.status,
+            "completed_turns": completed_turns,
+            "total_cost_usd": state.total_cost_usd,
+        },
+    )
 
 
 @app.get("/tasks/{run_id}/stream")
@@ -789,18 +837,20 @@ async def cancel_task(
 
 # ── Approval routes ────────────────────────────────────────────────────────────
 
+
 @app.get("/approvals")
 async def approvals_page(request: Request, user: str = Depends(_auth)) -> Response:
     role = _get_role(request)
-    items = [
-        {k: v for k, v in a.items() if k != "done"}
-        for a in _pending_approvals.values()
-    ]
-    return templates.TemplateResponse(request, "approvals.html", {
-        "user": user,
-        "role": role,
-        "approvals": items,
-    })
+    items = [{k: v for k, v in a.items() if k != "done"} for a in _pending_approvals.values()]
+    return templates.TemplateResponse(
+        request,
+        "approvals.html",
+        {
+            "user": user,
+            "role": role,
+            "approvals": items,
+        },
+    )
 
 
 @app.post("/approvals/{approval_id}/approve")
@@ -821,17 +871,19 @@ async def approve_action(
     fga = get_fga_client()
     if fga is not None and info["tool_name"] not in _HIGH_RISK_TOOLS:
         await fga.grant_tool(info["run_id"], info["tool_name"])
-    await append(AuditRecord(
-        run_id=info["run_id"],
-        actor=user,
-        event_type="approval",
-        tool_name=info["tool_name"],
-        tool_args=info["args"],
-        policy_decision=PolicyDecision.require_approval,
-        approver=user,
-        approved_at=datetime.now(timezone.utc),
-        outcome="approved",
-    ))
+    await append(
+        AuditRecord(
+            run_id=info["run_id"],
+            actor=user,
+            event_type="approval",
+            tool_name=info["tool_name"],
+            tool_args=info["args"],
+            policy_decision=PolicyDecision.require_approval,
+            approver=user,
+            approved_at=datetime.now(timezone.utc),
+            outcome="approved",
+        )
+    )
     info["done"].set()
     return RedirectResponse("/approvals", status_code=303)
 
@@ -854,22 +906,25 @@ async def deny_action(
             await fga.revoke_tool(info["run_id"], info["tool_name"])
         except Exception:
             pass
-    await append(AuditRecord(
-        run_id=info["run_id"],
-        actor=user,
-        event_type="approval",
-        tool_name=info["tool_name"],
-        tool_args=info["args"],
-        policy_decision=PolicyDecision.require_approval,
-        approver=user,
-        approved_at=datetime.now(timezone.utc),
-        outcome="denied",
-    ))
+    await append(
+        AuditRecord(
+            run_id=info["run_id"],
+            actor=user,
+            event_type="approval",
+            tool_name=info["tool_name"],
+            tool_args=info["args"],
+            policy_decision=PolicyDecision.require_approval,
+            approver=user,
+            approved_at=datetime.now(timezone.utc),
+            outcome="denied",
+        )
+    )
     info["done"].set()
     return RedirectResponse("/approvals", status_code=303)
 
 
 # ── Audit route ────────────────────────────────────────────────────────────────
+
 
 @app.get("/audit")
 async def audit_page(
@@ -882,18 +937,23 @@ async def audit_page(
     role = _get_role(request)
     ok, msg = await verify_chain()
     records, total = await query_records(run_id=run_id, actor=actor, tool=tool)
-    return templates.TemplateResponse(request, "audit.html", {
-        "user": user,
-        "role": role,
-        "records": records,
-        "total": total,
-        "chain_ok": ok,
-        "chain_msg": msg,
-        "filters": {"run_id": run_id, "actor": actor, "tool": tool},
-    })
+    return templates.TemplateResponse(
+        request,
+        "audit.html",
+        {
+            "user": user,
+            "role": role,
+            "records": records,
+            "total": total,
+            "chain_ok": ok,
+            "chain_msg": msg,
+            "filters": {"run_id": run_id, "actor": actor, "tool": tool},
+        },
+    )
 
 
 # ── History route ──────────────────────────────────────────────────────────────
+
 
 @app.get("/history")
 async def history_page(request: Request, user: str = Depends(_auth)) -> Response:
@@ -924,27 +984,36 @@ async def history_page(request: Request, user: str = Depends(_auth)) -> Response
         except Exception:
             pass
 
-    return templates.TemplateResponse(request, "history.html", {
-        "user": user,
-        "role": role,
-        "sessions": sessions,
-    })
+    return templates.TemplateResponse(
+        request,
+        "history.html",
+        {
+            "user": user,
+            "role": role,
+            "sessions": sessions,
+        },
+    )
 
 
 # ── Admin: user management ─────────────────────────────────────────────────────
+
 
 @app.get("/admin/users")
 async def admin_users_page(request: Request, user: str = Depends(_require_admin)) -> Response:
     um = _get_user_manager()
     users = await um.list_users()
     db_available = bool(settings.database_url)
-    return templates.TemplateResponse(request, "admin_users.html", {
-        "user": user,
-        "role": "admin",
-        "users": users,
-        "db_available": db_available,
-        "error": request.query_params.get("error", ""),
-    })
+    return templates.TemplateResponse(
+        request,
+        "admin_users.html",
+        {
+            "user": user,
+            "role": "admin",
+            "users": users,
+            "db_available": db_available,
+            "error": request.query_params.get("error", ""),
+        },
+    )
 
 
 @app.post("/admin/users")
@@ -985,23 +1054,29 @@ async def admin_delete_user(
 
 # ── Admin settings ────────────────────────────────────────────────────────────
 
+
 @app.get("/admin/settings")
 async def admin_settings(request: Request, user: str = Depends(_require_admin)) -> Response:
     from tack_ai.core.router import load_model_config  # noqa: PLC0415
+
     base_config = load_model_config()
     effective = _effective_model_config()
-    return templates.TemplateResponse(request, "admin_settings.html", {
-        "user": user,
-        "role": "admin",
-        "router_type": _effective_router_type(),
-        "task_budget_usd": _effective_budget(),
-        "tiers": effective.get("tiers", {}),
-        "base_tiers": base_config.get("tiers", {}),
-        "overrides": _runtime.get("model_overrides", {}),
-        "router_decision": effective.get("router", {}).get("decision", ""),
-        "success": request.query_params.get("success"),
-        "error": request.query_params.get("error"),
-    })
+    return templates.TemplateResponse(
+        request,
+        "admin_settings.html",
+        {
+            "user": user,
+            "role": "admin",
+            "router_type": _effective_router_type(),
+            "task_budget_usd": _effective_budget(),
+            "tiers": effective.get("tiers", {}),
+            "base_tiers": base_config.get("tiers", {}),
+            "overrides": _runtime.get("model_overrides", {}),
+            "router_decision": effective.get("router", {}).get("decision", ""),
+            "success": request.query_params.get("success"),
+            "error": request.query_params.get("error"),
+        },
+    )
 
 
 @app.post("/admin/settings")
@@ -1020,6 +1095,7 @@ async def admin_settings_save(
         return RedirectResponse("/admin/settings?error=Budget+must+be+positive", status_code=303)
 
     from tack_ai.core.router import load_model_config  # noqa: PLC0415
+
     base = load_model_config()
 
     overrides: dict[str, str] = {}
@@ -1051,10 +1127,12 @@ async def admin_settings_reset(
 
 # ── Metrics & observability ───────────────────────────────────────────────────
 
+
 @app.get("/metrics", include_in_schema=False)
 async def metrics_endpoint(user: str = Depends(_auth)) -> Response:
     """Prometheus text-format metrics. Auth-gated (any authenticated user)."""
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # noqa: PLC0415
+
     return Response(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
@@ -1062,6 +1140,7 @@ async def metrics_endpoint(user: str = Depends(_auth)) -> Response:
 
 
 # ── Audit export ──────────────────────────────────────────────────────────────
+
 
 @app.get("/audit/export")
 async def audit_export(
@@ -1075,11 +1154,13 @@ async def audit_export(
 ) -> Response:
     """Download audit records as JSON or CSV."""
     from tack_ai.audit import query_records  # noqa: PLC0415
+
     records, _total = await query_records(run_id=run_id, actor=actor, tool=tool, limit=limit)
 
     if fmt == "csv":
         import csv  # noqa: PLC0415
         import io  # noqa: PLC0415
+
         buf = io.StringIO()
         if records:
             writer = csv.DictWriter(buf, fieldnames=list(records[0].keys()))
@@ -1100,6 +1181,7 @@ async def audit_export(
 
 # ── API docs (auth-gated) ─────────────────────────────────────────────────────
 
+
 @app.get("/docs", include_in_schema=False)
 async def swagger_ui(user: str = Depends(_auth)) -> Response:
     return get_swagger_ui_html(openapi_url="/openapi.json", title="Tack-AI API Docs")
@@ -1112,10 +1194,12 @@ async def redoc_ui(user: str = Depends(_auth)) -> Response:
 
 # ── Entry point (P1: Ctrl+C fix) ──────────────────────────────────────────────
 
+
 def main() -> None:
     """
     Run the web server directly. Avoids the uv-run → uvicorn-reloader subprocess
     chain that swallows SIGINT when using `uv run uvicorn ... --reload`.
     """
     import uvicorn  # noqa: PLC0415
+
     uvicorn.run("tack_ai.web:app", host="0.0.0.0", port=8000, reload=True)
