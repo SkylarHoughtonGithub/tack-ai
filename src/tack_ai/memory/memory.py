@@ -10,20 +10,17 @@ from __future__ import annotations
 
 import psycopg
 from pydantic_ai import Agent
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
+
+from tack_ai.core.router import build_model
 
 RECENT_TURNS = 5  # keep this many turns verbatim; summarize the rest
 
 
 class ConversationMemory:
-    def __init__(self, db_url: str, anthropic_api_key: str) -> None:
+    def __init__(self, db_url: str, model_str: str, settings: object) -> None:
         self._db_url = db_url
         self._summarizer: Agent[None, str] = Agent(
-            AnthropicModel(
-                "claude-haiku-4-5-20251001",
-                provider=AnthropicProvider(api_key=anthropic_api_key),
-            ),
+            build_model(model_str, settings),  # type: ignore[arg-type]
             output_type=str,
             system_prompt=(
                 "You are a conversation summarizer. Given a list of turns, "
