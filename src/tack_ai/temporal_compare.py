@@ -45,11 +45,12 @@ try:
     from temporalio.client import Client
     from temporalio.common import RetryPolicy
     from temporalio.worker import Worker
+
     _TEMPORAL_AVAILABLE = True
 except ImportError:
     _TEMPORAL_AVAILABLE = False
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 
 settings = Settings()
 TASK_QUEUE = "tack-ai-agent"
@@ -62,11 +63,13 @@ if _TEMPORAL_AVAILABLE:
     @activity.defn
     async def routing_activity(question: str) -> dict:
         """Route the question to a model tier.  Runs once; result is checkpointed."""
-        from tack_ai.router import LLMRouter, RuleBasedRouter
+        from tack_ai.core.router import LLMRouter, RuleBasedRouter
 
         if settings.router_type == "llm" and settings.openai_api_key:
             try:
-                route = await LLMRouter(openai_api_key=settings.get_key("openai")).route(question)
+                route = await LLMRouter(
+                    model_str="gpt-4o-mini", openai_api_key=settings.get_key("openai")
+                ).route(question)
             except Exception:
                 route = RuleBasedRouter().route(question)
         else:
@@ -97,6 +100,7 @@ if _TEMPORAL_AVAILABLE:
     @dataclass
     class ApprovalState:
         """Mutable state updated via signals from outside the workflow."""
+
         pending_tool: str | None = None
         decisions: dict[str, bool] = field(default_factory=dict)
 
@@ -128,8 +132,7 @@ if _TEMPORAL_AVAILABLE:
             # Step 2: LLM run (activity — won't repeat on worker restart).
             result = await workflow.execute_activity(
                 llm_activity,
-                question,
-                run_id,
+                args=[question, run_id],
                 start_to_close_timeout=timedelta(minutes=10),
                 retry_policy=RetryPolicy(maximum_attempts=2),
             )
@@ -177,6 +180,7 @@ if _TEMPORAL_AVAILABLE:
 
 # ── Worker and client helpers ─────────────────────────────────────────────────
 
+
 async def run_worker(temporal_host: str = "localhost:7233") -> None:
     """Run the Temporal worker.  Must be running for workflows to execute."""
     if not _TEMPORAL_AVAILABLE:
@@ -208,8 +212,7 @@ async def run_temporal(
     client = await Client.connect(temporal_host)
     handle = await client.start_workflow(
         AgentWorkflow.run,
-        question,
-        run_id,
+        args=[question, run_id],
         id=wf_id,
         task_queue=TASK_QUEUE,
     )

@@ -8,13 +8,15 @@ Run (stdio, for Claude Desktop):
 Run (SSE, for programmatic clients):
     uv run python -m tack_ai.mcp_server --sse
 """
+
 from __future__ import annotations
 
+import os
 import sys
 
 from mcp.server.mcpserver import MCPServer
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 from tack_ai.policy import enforce
 
 settings = Settings()
@@ -35,21 +37,14 @@ async def search_documents(query: str, user: str = "user") -> str:
     if not settings.openfga_store_id or not settings.openfga_model_id:
         return "Document search not configured (OPENFGA_STORE_ID or OPENFGA_MODEL_ID missing)."
 
-    from tack_ai.auth import FGAClient
-    from tack_ai.retrieval import format_for_prompt
-    from tack_ai.retrieval import search_documents as _search
+    from tack_ai.memory.retrieval import format_for_prompt
+    from tack_ai.memory.retrieval import search_documents as _search
 
-    fga = FGAClient(
-        api_url=settings.openfga_url,
-        store_id=settings.openfga_store_id,
-        model_id=settings.openfga_model_id,
-    )
     results = await _search(
         query=query,
         user=user,
         db_url=settings.database_url,
         openai_api_key=settings.get_key("openai"),
-        fga=fga,
     )
     return format_for_prompt(results)
 
@@ -64,9 +59,11 @@ async def draft_email(to: str, subject: str, body: str) -> str:
 
 
 def main() -> None:
-    transport = "sse" if "--sse" in sys.argv else "stdio"
-    kwargs: dict = {"host": "0.0.0.0", "port": 8083} if transport == "sse" else {}
-    mcp.run(transport=transport, **kwargs)
+    if "--sse" in sys.argv:
+        host = os.environ.get("MCP_HOST", "127.0.0.1")
+        mcp.run(transport="sse", host=host, port=8083)
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":

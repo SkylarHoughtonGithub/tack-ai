@@ -8,7 +8,7 @@ import psycopg
 from openai import AsyncOpenAI
 from pgvector.psycopg import register_vector_async
 
-from tack_ai.ingestion import EMBED_MODEL
+from tack_ai.memory.ingestion import EMBED_MODEL
 
 TOP_K = 8
 RETURN_K = 5
@@ -79,7 +79,5 @@ def format_for_prompt(results: list[dict]) -> str:
         return "No relevant documents found."
     parts = []
     for r in results:
-        parts.append(
-            f"[Source: {r['origin']}  score={r['score']}]\n{r['content']}"
-        )
+        parts.append(f"[Source: {r['origin']}  score={r['score']}]\n{r['content']}")
     return "\n\n---\n\n".join(parts)

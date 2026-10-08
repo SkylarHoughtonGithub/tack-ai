@@ -21,10 +21,10 @@ from bs4 import BeautifulSoup
 
 @dataclass
 class DocumentMeta:
-    id: str           # stable unique key used by read_document()
-    source_id: str    # "local:<root>" or "http:<origin>"
+    id: str  # stable unique key used by read_document()
+    source_id: str  # "local:<root>" or "http:<origin>"
     source_type: str  # "local" | "http"
-    origin: str       # absolute path or full URL
+    origin: str  # absolute path or full URL
 
 
 class DocumentSource(Protocol):
@@ -35,6 +35,7 @@ class DocumentSource(Protocol):
 
 
 # ── Local folder ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class LocalFolderSource:
@@ -51,12 +52,14 @@ class LocalFolderSource:
         docs = []
         for path in sorted(self.root.rglob("*")):
             if path.is_file() and path.suffix in self.extensions:
-                docs.append(DocumentMeta(
-                    id=str(path.resolve()),
-                    source_id=self.source_id,
-                    source_type="local",
-                    origin=str(path.resolve()),
-                ))
+                docs.append(
+                    DocumentMeta(
+                        id=str(path.resolve()),
+                        source_id=self.source_id,
+                        source_type="local",
+                        origin=str(path.resolve()),
+                    )
+                )
         return docs
 
     def read_document(self, doc_id: str) -> str:
@@ -142,7 +145,7 @@ class HttpSource:
                     if depth < self.max_depth:
                         soup = BeautifulSoup(resp.text, "html.parser")
                         for a in soup.find_all("a", href=True):
-                            href = urljoin(url, a["href"]).split("#")[0]
+                            href = urljoin(url, str(a["href"])).split("#")[0]
                             if _same_origin(url, href) and href not in visited:
                                 next_urls.append(href)
                 except Exception as exc:

@@ -16,10 +16,12 @@ Run:
 
 Requires Node.js:  npx -y @modelcontextprotocol/server-filesystem
 """
+
 from __future__ import annotations
 
 import contextlib
 import inspect
+import os
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -27,7 +29,7 @@ from typing import Any, Callable
 from mcp import Client, StdioServerParameters
 from mcp.server.mcpserver import MCPServer
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 from tack_ai.policy import enforce
 
 GATEWAY_PORT = 8082
@@ -76,7 +78,7 @@ def _make_proxy(tool_name: str, tool_description: str, input_schema: dict) -> Ca
 
     _proxy.__name__ = tool_name
     _proxy.__doc__ = tool_description or f"Proxied: {tool_name}"
-    _proxy.__signature__ = inspect.Signature(params, return_annotation=str)
+    _proxy.__signature__ = inspect.Signature(params, return_annotation=str)  # type: ignore[attr-defined]
     _proxy.__annotations__ = annotations
     return _proxy
 
@@ -118,6 +120,7 @@ gateway = MCPServer("tack-ai-gateway", lifespan=_lifespan)
 
 if __name__ == "__main__":
     try:
-        gateway.run(transport="sse", host="0.0.0.0", port=GATEWAY_PORT)
+        gateway_host = os.environ.get("MCP_HOST", "127.0.0.1")
+        gateway.run(transport="sse", host=gateway_host, port=GATEWAY_PORT)
     except KeyboardInterrupt:
         pass

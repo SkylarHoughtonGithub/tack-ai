@@ -8,6 +8,7 @@ Runs alongside the main Pydantic AI harness; not a replacement for it.
 Usage:
     uv run python -m tack_ai.langgraph_approval
 """
+
 import asyncio
 from typing import Any, TypedDict
 
@@ -27,6 +28,7 @@ class ApprovalState(TypedDict):
 
 
 # ── Nodes ─────────────────────────────────────────────────────────────────────
+
 
 async def _check_policy(state: ApprovalState) -> dict:
     decision = await policy_check(state["tool_name"], state["args"])
@@ -48,12 +50,16 @@ def _request_approval(state: ApprovalState) -> dict:
     The caller resumes by invoking the graph with:
         Command(resume={"approved": True})   # or False
     """
-    human_input = interrupt({
-        "type": "approval_required",
-        "tool_name": state["tool_name"],
-        "args": state["args"],
-    })
-    approved = human_input.get("approved", False) if isinstance(human_input, dict) else bool(human_input)
+    human_input = interrupt(
+        {
+            "type": "approval_required",
+            "tool_name": state["tool_name"],
+            "args": state["args"],
+        }
+    )
+    approved = (
+        human_input.get("approved", False) if isinstance(human_input, dict) else bool(human_input)
+    )
     return {"approved": approved}
 
 
@@ -67,6 +73,7 @@ def _execute_tool(state: ApprovalState) -> dict:
 
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
+
 
 def build_graph() -> StateGraph:
     g = StateGraph(ApprovalState)
@@ -99,6 +106,7 @@ def compiled_graph(checkpointer=None):
 
 # ── Demo ──────────────────────────────────────────────────────────────────────
 
+
 async def demo() -> None:
     """Run the same approval scenario through both implementations and compare."""
     checkpointer = MemorySaver()
@@ -119,7 +127,13 @@ async def demo() -> None:
     # In LangGraph 1.2+, ainvoke() returns (no exception) when interrupted;
     # check pending.next to distinguish interrupt from normal completion.
     await graph.ainvoke(
-        {"tool_name": tool_name, "args": args, "policy_decision": None, "approved": None, "result": None},
+        {
+            "tool_name": tool_name,
+            "args": args,
+            "policy_decision": None,
+            "approved": None,
+            "result": None,
+        },
         config=config,
     )
 

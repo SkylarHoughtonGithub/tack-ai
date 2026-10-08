@@ -8,6 +8,19 @@
     {{ error }}
   </div>
   {% endif %}
+
+  {% if oidc_enabled %}
+  <a href="/auth/login"
+     class="block w-full text-center border border-gray-300 rounded py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors mb-4">
+    Sign in with {{ oidc_provider | capitalize }}
+  </a>
+  <div class="flex items-center gap-3 mb-4">
+    <hr class="flex-1 border-gray-200">
+    <span class="text-xs text-gray-400">or</span>
+    <hr class="flex-1 border-gray-200">
+  </div>
+  {% endif %}
+
   <form method="post" action="/login" class="bg-white rounded border p-6 space-y-4">
     <div>
       <label class="block text-xs text-gray-500 mb-1">Username</label>

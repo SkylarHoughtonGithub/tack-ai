@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -20,19 +20,22 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from tack_ai import audit
 from tack_ai.audit import append, current_run_id
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
+from tack_ai.core.models import AuditRecord
+from tack_ai.core.router import ExecutionPath, LLMRouter, Route, RuleBasedRouter, load_model_config
 from tack_ai.memory import ConversationMemory
-from tack_ai.models import AuditRecord
-from tack_ai.policy import enforce
-from tack_ai.retrieval import format_for_prompt
-from tack_ai.retrieval import search_documents as _search_documents
-from tack_ai.router import ExecutionPath, LLMRouter, Route, RuleBasedRouter, load_model_config
-
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    level=logging.INFO,
+from tack_ai.memory.retrieval import format_for_prompt
+from tack_ai.memory.retrieval import search_documents as _search_documents
+from tack_ai.observability import (
+    configure_logging,
+    get_logger,
 )
-log = logging.getLogger("tack_ai.agent")
+from tack_ai.policy import enforce
+
+_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+_LOG_JSON = os.environ.get("LOG_JSON", "true").lower() not in ("0", "false", "no")
+configure_logging(json=_LOG_JSON, level=_LOG_LEVEL)
+log = get_logger("tack_ai.agent")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOGS_DIR = PROJECT_ROOT / "logs"
@@ -50,6 +53,7 @@ logfire.instrument_pydantic_ai()
 _mcp_servers: list = []
 if settings.mcp_gateway_url:
     from pydantic_ai.mcp import MCPToolset
+
     _mcp_servers.append(MCPToolset(settings.mcp_gateway_url).prefixed("fs"))
 
 # Phase 6 — conversation memory (lazy; agent starts fine without a DB)
@@ -70,6 +74,7 @@ class ResearchAnswer(BaseModel):
     summary: str
     sources: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
+
 
 # Prompt caching is enabled via model_settings on each run() call so that the
 # system prompt (which is long and repeated) is cached across turns.
@@ -158,6 +163,7 @@ def _run_in_docker(code: str, language: str) -> str:
     ext = _DOCKER_EXTENSIONS[language]
 
     import os
+
     docker_bin = _find_docker()
     if docker_bin is None:
         tried = ", ".join(_DOCKER_CANDIDATES) + ", and system PATH"
@@ -175,17 +181,28 @@ def _run_in_docker(code: str, language: str) -> str:
         try:
             result = subprocess.run(
                 [
-                    docker_bin, "run", "--rm",
-                    "--network", "none",
+                    docker_bin,
+                    "run",
+                    "--rm",
+                    "--network",
+                    "none",
                     "--read-only",
-                    "--tmpfs", "/tmp:size=64m",
-                    "--memory", "128m",
-                    "--cpus", "0.5",
-                    "--pids-limit", "64",
-                    "--security-opt", "no-new-privileges",
-                    "-v", f"{tmpdir}:/sandbox:ro",
+                    "--tmpfs",
+                    "/tmp:size=64m",  # nosec B108 — mount inside container, not host tmp
+                    "--memory",
+                    "128m",
+                    "--cpus",
+                    "0.5",
+                    "--pids-limit",
+                    "64",
+                    "--security-opt",
+                    "no-new-privileges",
+                    "-v",
+                    f"{tmpdir}:/sandbox:ro",
                     image,
-                    "sh", "-c", run_cmd,
+                    "sh",
+                    "-c",
+                    run_cmd,
                 ],
                 capture_output=True,
                 text=True,
@@ -204,6 +221,7 @@ def _run_in_docker(code: str, language: str) -> str:
 
 
 if settings.brave_api_key:
+
     @agent.tool_plain
     async def web_search(query: str) -> str:
         """Search the web for current information on a topic."""
@@ -275,6 +293,7 @@ async def send_email(to: str, subject: str, body: str) -> str:
     # even if a crash causes the step to be retried.
     if settings.database_url:
         from tack_ai.durable import check_or_record_email
+
         return await check_or_record_email(to, subject, body)
     return f"[stub] Email sent to {to}."
 
@@ -324,14 +343,16 @@ async def search_documents(query: str, user: str = "user") -> str:
     run_id = current_run_id.get()
     if run_id:
         returned_origins = [r["origin"] for r in results]
-        await append(AuditRecord(
-            run_id=run_id,
-            actor=user,
-            event_type="retrieval",
-            tool_name="search_documents",
-            tool_args={"query": query[:80], "returned": returned_origins},
-            outcome=f"{len(results)} chunk(s) returned",
-        ))
+        await append(
+            AuditRecord(
+                run_id=run_id,
+                actor=user,
+                event_type="retrieval",
+                tool_name="search_documents",
+                tool_args={"query": query[:80], "returned": returned_origins},
+                outcome=f"{len(results)} chunk(s) returned",
+            )
+        )
 
     return _wrap_untrusted(format_for_prompt(results), "document_store")
 
@@ -368,10 +389,7 @@ def _estimate_cost(usage, model_str: str) -> float:
         calc = genai_prices.calc_price(usage, model_name)
         return float(calc.total_price)
     except Exception:
-        return (
-            (usage.input_tokens or 0) * 3.0
-            + (usage.output_tokens or 0) * 15.0
-        ) / 1_000_000
+        return ((usage.input_tokens or 0) * 3.0 + (usage.output_tokens or 0) * 15.0) / 1_000_000
 
 
 def _log_route(question: str, route: Route, model_str: str, cost_usd: float) -> None:
@@ -399,9 +417,14 @@ async def run(question: str) -> None:
     # 1. Route
     if settings.router_type == "llm" and settings.openai_api_key:
         try:
-            route = await LLMRouter(model_str=model_config["router"]["decision"], openai_api_key=settings.get_key("openai")).route(question)
+            route = await LLMRouter(
+                model_str=model_config["router"]["decision"],
+                openai_api_key=settings.get_key("openai"),
+            ).route(question)
         except Exception as e:
-            print(f"LLM router unavailable ({e.__class__.__name__}: {e}), falling back to rule-based.")
+            print(
+                f"LLM router unavailable ({e.__class__.__name__}: {e}), falling back to rule-based."
+            )
             route = RuleBasedRouter().route(question)
     else:
         route = RuleBasedRouter().route(question)
@@ -411,8 +434,10 @@ async def run(question: str) -> None:
 
     print(f"\nQuestion: {question}")
     print(f"Run ID:   {run_id}")
-    print(f"Route:    {route.tier.value} | {route.reasoning_effort.value} effort | "
-          f"{route.execution_path.value} | {route.reason}")
+    print(
+        f"Route:    {route.tier.value} | {route.reasoning_effort.value} effort | "
+        f"{route.execution_path.value} | {route.reason}"
+    )
     print(f"Model:    {model_str}")
     if _mcp_servers:
         print(f"MCP:      {len(_mcp_servers)} server(s) active")
@@ -420,15 +445,17 @@ async def run(question: str) -> None:
         print("          (batch path noted — executing realtime; full batch API in Phase 9)")
 
     # 2. Audit — routing decision
-    await append(AuditRecord(
-        run_id=run_id,
-        actor="user",
-        event_type="routing",
-        routing_tier=route.tier.value,
-        routing_reason=route.reason,
-        model=model_str,
-        provider=provider,
-    ))
+    await append(
+        AuditRecord(
+            run_id=run_id,
+            actor="user",
+            event_type="routing",
+            routing_tier=route.tier.value,
+            routing_reason=route.reason,
+            model=model_str,
+            provider=provider,
+        )
+    )
 
     # 3. Conversation memory context
     session_id = run_id  # one session per run; multi-turn sessions in Phase 10
@@ -437,9 +464,7 @@ async def run(question: str) -> None:
     if memory:
         memory_context = await memory.get_context(session_id)
 
-    full_question = (
-        f"{memory_context}\n\nUser: {question}" if memory_context else question
-    )
+    full_question = f"{memory_context}\n\nUser: {question}" if memory_context else question
 
     # 4. Run (with prompt caching enabled for Anthropic models)
     use_cache = provider == "anthropic"
@@ -475,15 +500,17 @@ async def run(question: str) -> None:
         print(f"\nWarning: run cost ${cost:.5f} exceeded budget ${settings.task_budget_usd:.5f}")
 
     # 7. Audit — outcome
-    await append(AuditRecord(
-        run_id=run_id,
-        actor="user",
-        event_type="outcome",
-        model=model_str,
-        provider=provider,
-        outcome=result.output.summary[:200],
-        cost_usd=cost,
-    ))
+    await append(
+        AuditRecord(
+            run_id=run_id,
+            actor="user",
+            event_type="outcome",
+            model=model_str,
+            provider=provider,
+            outcome=result.output.summary[:200],
+            cost_usd=cost,
+        )
+    )
 
     # 8. Output
     print("\n=== Tool-call loop ===")
@@ -504,9 +531,11 @@ async def run(question: str) -> None:
     print(f"Estimated cost: ${cost:.5f}  (budget: ${settings.task_budget_usd:.2f})")
 
     print("\n=== Audit ===")
-    ok, msg = await audit.verify_chain()
-    print(f"Chain:   {'✓' if ok else '✗'}  {msg}")
-    print(f"Replay:  uv run python -c \"import asyncio; from tack_ai.audit import replay; asyncio.run(replay('{run_id}'))\"")
+    ok, chain_msg = await audit.verify_chain()
+    print(f"Chain:   {'✓' if ok else '✗'}  {chain_msg}")
+    print(
+        f"Replay:  uv run python -c \"import asyncio; from tack_ai.audit import replay; asyncio.run(replay('{run_id}'))\""
+    )
 
 
 if __name__ == "__main__":
