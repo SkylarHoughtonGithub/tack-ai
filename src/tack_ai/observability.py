@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from typing import Any
 
 import structlog
 from opentelemetry import trace
@@ -81,7 +82,7 @@ def configure_tracing() -> None:
     provider.add_span_processor(
         BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces"))
     )
-    trace.set_global_default_tracer_provider(provider)
+    trace.set_tracer_provider(provider)
 
 
 def get_tracer(name: str) -> trace.Tracer:
@@ -126,6 +127,7 @@ def configure_logging(json: bool = True, level: str = "INFO") -> None:
         structlog.stdlib.ExtraAdder(),
     ]
 
+    renderer: Any
     if json:
         renderer = structlog.processors.JSONRenderer()
     else:

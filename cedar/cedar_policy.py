@@ -165,7 +165,7 @@ _TOOL_AUTH_CASES: list[tuple[str, dict, dict, PolicyDecision]] = [
     ("read_multiple_files", {}, {}, PolicyDecision.allow),
 ]
 
-_ROUTING_SKIPPED = [
+_ROUTING_SKIPPED: list[tuple[str, dict, dict, PolicyDecision]] = [
     ("__route__", {"tier": "simple", "estimated_cost_usd": 0.01}, {}, PolicyDecision.allow),
     ("__route__", {"tier": "deep_reasoning", "estimated_cost_usd": 1.99}, {}, PolicyDecision.allow),
     ("__route__", {"tier": "deep_reasoning", "estimated_cost_usd": 2.01}, {}, PolicyDecision.require_approval),

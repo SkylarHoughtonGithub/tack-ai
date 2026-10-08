@@ -145,7 +145,7 @@ class HttpSource:
                     if depth < self.max_depth:
                         soup = BeautifulSoup(resp.text, "html.parser")
                         for a in soup.find_all("a", href=True):
-                            href = urljoin(url, a["href"]).split("#")[0]
+                            href = urljoin(url, str(a["href"])).split("#")[0]
                             if _same_origin(url, href) and href not in visited:
                                 next_urls.append(href)
                 except Exception as exc:

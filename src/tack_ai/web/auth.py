@@ -233,6 +233,8 @@ class UserManager:
             await conn.commit()
 
     async def _fetch_user(self, username: str) -> dict | None:
+        if not self._db_url:
+            return None
         import psycopg  # noqa: PLC0415
         from psycopg.rows import dict_row  # noqa: PLC0415
 

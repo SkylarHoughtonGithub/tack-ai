@@ -35,6 +35,7 @@ import json
 import os
 import secrets
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -65,7 +66,7 @@ TEMPLATES_DIR = Path(__file__).parents[3] / "templates"
 
 
 @asynccontextmanager
-async def lifespan(fastapi_app: FastAPI) -> None:
+async def lifespan(fastapi_app: FastAPI) -> AsyncGenerator[None, None]:
     # Tracing — OTLP exporter wired up before any requests arrive.
     configure_tracing()
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # noqa: PLC0415
@@ -488,7 +489,9 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
             state.push({"type": "done"})
             return
 
+        assert _agent_run is not None
         run_result = _agent_run.result
+        assert run_result is not None
         run_usage = run_result.usage
         cost = _estimate_cost(run_usage, model_str)
         state.cost_usd = cost

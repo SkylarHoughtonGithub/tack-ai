@@ -67,7 +67,7 @@ if _TEMPORAL_AVAILABLE:
 
         if settings.router_type == "llm" and settings.openai_api_key:
             try:
-                route = await LLMRouter(openai_api_key=settings.get_key("openai")).route(question)
+                route = await LLMRouter(model_str="gpt-4o-mini", openai_api_key=settings.get_key("openai")).route(question)
             except Exception:
                 route = RuleBasedRouter().route(question)
         else:
@@ -130,8 +130,7 @@ if _TEMPORAL_AVAILABLE:
             # Step 2: LLM run (activity — won't repeat on worker restart).
             result = await workflow.execute_activity(
                 llm_activity,
-                question,
-                run_id,
+                args=[question, run_id],
                 start_to_close_timeout=timedelta(minutes=10),
                 retry_policy=RetryPolicy(maximum_attempts=2),
             )
@@ -211,8 +210,7 @@ async def run_temporal(
     client = await Client.connect(temporal_host)
     handle = await client.start_workflow(
         AgentWorkflow.run,
-        question,
-        run_id,
+        args=[question, run_id],
         id=wf_id,
         task_queue=TASK_QUEUE,
     )

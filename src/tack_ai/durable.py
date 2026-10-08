@@ -142,6 +142,7 @@ async def wait_for_db_approval(
     import psycopg  # noqa: PLC0415
 
     approval_id = _approval_id(run_id, tool_name)
+    assert settings.database_url, "DATABASE_URL required for durable approval"
 
     async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
         await conn.execute(
@@ -211,6 +212,7 @@ async def check_or_record_email(to: str, subject: str, body: str) -> str:
     import psycopg  # noqa: PLC0415
 
     key = _email_key(to, subject, body)
+    assert settings.database_url, "DATABASE_URL required for idempotent email"
 
     async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
         async with conn.cursor() as cur:
@@ -264,7 +266,7 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     print(f"Route:    {route.tier.value} | {route.reason}")
     print("Durable:  yes (DBOS → Postgres)")
 
-    append(
+    await append(
         AuditRecord(
             run_id=run_id,
             actor="user",
@@ -280,7 +282,7 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     # workflow_id_reuse_policy='return-existing' means: if this workflow ID
     # already exists (crashed run), return its handle and resume it.
     with SetWorkflowID(wf_id, workflow_id_reuse_policy="return-existing"):
-        handle = DBOS.start_workflow_async(_agent_workflow_fn, question, run_id)
+        handle = await DBOS.start_workflow_async(_agent_workflow_fn, question, run_id)
 
     result_dict: dict = await handle.get_result()
 
@@ -289,7 +291,7 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     print(f"Sources:    {result_dict.get('sources', [])}")
     print(f"Confidence: {result_dict.get('confidence', 0):.2f}")
 
-    append(
+    await append(
         AuditRecord(
             run_id=run_id,
             actor="user",
@@ -300,9 +302,9 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
         )
     )
 
-    ok, msg = verify_chain()
+    ok, chain_msg = await verify_chain()
     print("\n=== Audit ===")
-    print(f"Chain: {'✓' if ok else '✗'}  {msg}")
+    print(f"Chain: {'✓' if ok else '✗'}  {chain_msg}")
     print(f"Replay: uv run python -c \"from tack_ai.audit import replay; replay('{run_id}')\"")
 
     DBOS.destroy()

@@ -531,8 +531,8 @@ async def run(question: str) -> None:
     print(f"Estimated cost: ${cost:.5f}  (budget: ${settings.task_budget_usd:.2f})")
 
     print("\n=== Audit ===")
-    ok, msg = await audit.verify_chain()
-    print(f"Chain:   {'✓' if ok else '✗'}  {msg}")
+    ok, chain_msg = await audit.verify_chain()
+    print(f"Chain:   {'✓' if ok else '✗'}  {chain_msg}")
     print(
         f"Replay:  uv run python -c \"import asyncio; from tack_ai.audit import replay; asyncio.run(replay('{run_id}'))\""
     )

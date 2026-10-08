@@ -77,7 +77,7 @@ def _make_proxy(tool_name: str, tool_description: str, input_schema: dict) -> Ca
 
     _proxy.__name__ = tool_name
     _proxy.__doc__ = tool_description or f"Proxied: {tool_name}"
-    _proxy.__signature__ = inspect.Signature(params, return_annotation=str)
+    _proxy.__signature__ = inspect.Signature(params, return_annotation=str)  # type: ignore[attr-defined]
     _proxy.__annotations__ = annotations
     return _proxy
 
