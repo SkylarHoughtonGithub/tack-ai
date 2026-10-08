@@ -189,7 +189,8 @@ async def query_records(
                     params.append(tool)
                 where = (
                     pgsql.SQL("WHERE ") + pgsql.SQL(" AND ").join(clauses)
-                    if clauses else pgsql.SQL("")
+                    if clauses
+                    else pgsql.SQL("")
                 )
 
                 await cur.execute(
