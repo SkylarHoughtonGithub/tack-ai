@@ -70,7 +70,9 @@ def configure_tracing() -> None:
     if not endpoint:
         return
 
-    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter  # noqa: PLC0415
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+        OTLPSpanExporter,  # noqa: PLC0415
+    )
 
     service_name = os.environ.get("OTEL_SERVICE_NAME", "tack-ai")
     resource = Resource(attributes={SERVICE_NAME: service_name})
