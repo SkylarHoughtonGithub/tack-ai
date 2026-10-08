@@ -7,9 +7,9 @@
 
 ## Context
 
-Early phases stored the audit trail in SQLite. The memory/retrieval module required
-Postgres for pgvector. Temporal (Phase 9) also requires Postgres. Running two
-different databases for the same project added operational overhead without benefit.
+The audit trail was initially stored in SQLite. The memory/retrieval module required
+Postgres for pgvector, and Temporal also requires Postgres. Running two different
+databases added operational overhead without benefit.
 
 ## Decision
 

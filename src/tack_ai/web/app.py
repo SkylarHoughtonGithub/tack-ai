@@ -1,5 +1,5 @@
 """
-Phase 10 — Web console for the AI agent harness.
+Web console — ops and compliance surface for tack-ai.
 
 Routes
 ------

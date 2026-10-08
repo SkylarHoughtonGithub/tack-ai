@@ -1,9 +1,9 @@
 """
-Phase 11 — LangGraph approval flow module.
+LangGraph approval flow stub.
 
 Implements the approval gate as an explicit LangGraph graph with a
 MemorySaver checkpointer and interrupt()-based human-in-the-loop step.
-Runs alongside the main Pydantic AI harness; not a replacement for it.
+Retained for reference; the main approval path uses pydantic_graph.
 
 Usage:
     uv run python -m tack_ai.langgraph_approval
@@ -118,7 +118,7 @@ async def demo() -> None:
     config = {"configurable": {"thread_id": "demo-1"}}
 
     print("=" * 60)
-    print("LangGraph approval flow (Phase 11 comparison)")
+    print("LangGraph approval flow (stub)")
     print("=" * 60)
     print(f"\nTool:    {tool_name}")
     print(f"Args:    {args}")

@@ -8,7 +8,7 @@
 # tack-ai
 </div>
 
-A personal AI agent harness that routes tasks across Anthropic and OpenAI models, enforces policy via OPA before every tool call, and records everything in a tamper-evident audit trail. Built as a structured learning project across 12 phases.
+A policy-governed coding agent with a tamper-evident audit trail. Designed for compliance-sensitive environments where every tool call must be authorized, every decision must be auditable, and the cost of each run must be tracked and enforced.
 
 ## What it does
 
@@ -45,7 +45,7 @@ A personal AI agent harness that routes tasks across Anthropic and OpenAI models
 |-----------|------------|---------|
 | Agent | Pydantic AI | 8 tools, prompt caching, cost tracking |
 | Policy engine | OPA (primary), Cedar (comparison) | Tool authorization, routing, budget |
-| Approval flow | LangGraph | Human-in-the-loop for gray-area decisions |
+| Approval flow | pydantic_graph | Human-in-the-loop for gray-area decisions |
 | Access control | OpenFGA | Fine-grained per-resource permissions |
 | Memory | Postgres + pgvector | Conversation history + semantic doc search |
 | Observability | structlog, Prometheus, OpenTelemetry, Logfire | Traces, metrics, structured logs |

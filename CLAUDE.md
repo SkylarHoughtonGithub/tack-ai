@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A personal AI agent harness built as a structured learning project. The goal is a research/operations assistant that routes tasks across Anthropic and OpenAI models, enforces policy via OPA before every tool call, and records everything in a tamper-evident audit trail. The plan lives at `docs/AI Agent Harness Learning Project Plan.md` (untracked by git).
+A policy-governed coding agent with a tamper-evident audit trail. Anthropic and OpenAI are first-class equal providers. Every tool call is OPA/Cedar-authorized, every routing decision is auditable, and cost is tracked per run. Designed for compliance-sensitive environments. Roadmap lives at `docs/roadmap.md`.
 
 ## Commands
 
@@ -37,9 +37,9 @@ subprocess layer that can swallow Ctrl+C.
 
 ## Architecture decisions
 
-**Framework:** Pydantic AI (primary). LangGraph appears in Phase 11 as a standalone approval-flow module for comparison — not a replacement.
+**Framework:** Pydantic AI throughout. `pydantic_graph` for the coding workflow (Plan → Edit → Test → Evaluate). `langgraph_approval.py` is a retained stub — not used in the main path.
 
-**Policy engine:** OPA (primary). The policy layer governs three things: tool authorization, routing decisions (which model/tier), and budget enforcement. Cedar is authorization-only and cannot cover routing/budget rules, so it stays in Phase 11 as a comparison module for the tool-authorization subset only.
+**Policy engine:** OPA (primary). The policy layer governs three things: tool authorization, routing decisions (which model/tier), and budget enforcement. Cedar covers the tool-authorization subset — it is authorization-only and cannot express routing or budget rules.
 
 **Execution paths:** Every `Route` has a `realtime` or `batch` execution path. Non-interactive tasks route to the Anthropic Batch API (50% cheaper, async settlement). The router decides based on whether a human is waiting on a live response.
 
@@ -51,19 +51,18 @@ subprocess layer that can swallow Ctrl+C.
 
 - `Task` — a unit of work with priority and timestamp
 - `ToolCall` — a single tool invocation with its arguments and run ID
-- `AuditRecord` — one event in the audit trail; holds actor, tool, policy decision, cost, and hash fields (hash fields added in Phase 4)
+- `AuditRecord` — one event in the audit trail; holds actor, tool, policy decision, cost, and hash fields
 - `PolicyDecision` — enum: `allow` / `deny` / `require_approval`
 
-## Phase status
+## What is built
 
-**Phases 0–11 complete. P1 complete. P2 enhancements in progress (branch: p2):**
 - Module layout: sub-packages `core/`, `policy/`, `audit/`, `web/`, `memory/`; flat shims for backward compat
 - Taskfile.yml: `task dev`, `task opa`, `task web`, `task test`, `task lint`
 - OpenAPI docs: auth-gated `/docs` and `/redoc`
 - Routing config UI: `/admin/settings` — runtime overrides for router type, budget, model tiers
 - Observability: structlog JSON logging, Prometheus `/metrics`, audit CSV/JSON export at `/audit/export`
-- Docker Compose: added `app` + `opa` services, multi-stage Dockerfile, `.dockerignore`
+- Docker Compose: `app` + `opa` services, multi-stage Dockerfile, `.dockerignore`
 - CD pipeline: `.github/workflows/cd.yml` — builds and pushes Docker image to GHCR on main
-- Architecture docs: `docs/architecture.md` component map + data flow; ADRs in `docs/decisions/`
-- Agent tool inventory: `docs/agents.md` — all tools, policies, approval requirements
+- Architecture docs: `docs/decisions/ARCHITECTURE.md` component map + data flow; ADRs in `docs/decisions/`
+- Agent tool inventory: `docs/AGENTS.md` — all tools, policies, approval requirements
 - OIDC / SSO: `web/oidc.py` — Google, GitHub, or generic OIDC via Authlib; role mapping from claims

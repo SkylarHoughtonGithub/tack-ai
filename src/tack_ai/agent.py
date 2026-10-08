@@ -49,14 +49,12 @@ logfire.configure(
 )
 logfire.instrument_pydantic_ai()
 
-# Phase 7 — MCP toolsets (optional; agent works fine without them)
 _mcp_servers: list = []
 if settings.mcp_gateway_url:
     from pydantic_ai.mcp import MCPToolset
 
     _mcp_servers.append(MCPToolset(settings.mcp_gateway_url).prefixed("fs"))
 
-# Phase 6 — conversation memory (lazy; agent starts fine without a DB)
 _memory: ConversationMemory | None = None
 
 
@@ -442,7 +440,7 @@ async def run(question: str) -> None:
     if _mcp_servers:
         print(f"MCP:      {len(_mcp_servers)} server(s) active")
     if route.execution_path == ExecutionPath.batch:
-        print("          (batch path noted — executing realtime; full batch API in Phase 9)")
+        print("          (batch path noted — executing realtime)")
 
     # 2. Audit — routing decision
     await append(
@@ -458,7 +456,7 @@ async def run(question: str) -> None:
     )
 
     # 3. Conversation memory context
-    session_id = run_id  # one session per run; multi-turn sessions in Phase 10
+    session_id = run_id
     memory = _get_memory()
     memory_context = ""
     if memory:

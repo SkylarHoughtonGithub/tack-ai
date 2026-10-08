@@ -1,4 +1,4 @@
-"""Policy enforcement — OPA (primary) and Cedar (Phase 11 comparison)."""
+"""Policy enforcement — OPA (primary) and Cedar (tool-authorization subset)."""
 
 from tack_ai.policy.engine import (
     _approval_override,

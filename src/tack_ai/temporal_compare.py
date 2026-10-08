@@ -1,9 +1,8 @@
 """
-Phase 9 — Temporal comparison module.
+Temporal comparison module.
 
-This module implements the same durable agent workflow as durable.py but using
-Temporal instead of DBOS.  Run it side-by-side with the DBOS version to compare
-the two frameworks directly.
+Implements the same durable agent workflow as durable.py using Temporal instead
+of DBOS, for direct framework comparison.
 
 Key structural differences vs DBOS
 ────────────────────────────────────
