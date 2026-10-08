@@ -1,0 +1,67 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Start Compose infra then the web console (Ctrl+C stops the web server)
+    deps: [up]
+    cmds:
+      - uv run tack-ai-web
+
+  up:
+    desc: Start Docker Compose services (postgres, openfga, opa) in the background
+    cmds:
+      - docker-compose up -d postgres openfga opa
+
+  down:
+    desc: Stop all Docker Compose services
+    cmds:
+      - docker-compose down
+
+  opa:
+    desc: Start the OPA policy server on :8181
+    cmds:
+      - opa run --server --addr :8181 policies/
+
+  web:
+    desc: Start the web console on :8000
+    cmds:
+      - uv run tack-ai-web
+
+  agent:
+    desc: Run the CLI agent (one-shot)
+    cmds:
+      - uv run python -m tack_ai.agent
+
+  test:
+    desc: Run unit tests (no external services required)
+    cmds:
+      - uv run pytest tests/ -v --ignore=tests/e2e
+
+  e2e:
+    desc: Run Playwright end-to-end tests (requires a running web server)
+    cmds:
+      - uv run pytest tests/e2e/ -v
+
+  lint:
+    desc: Run ruff, mypy, and bandit
+    cmds:
+      - uv run ruff check src/
+      - uv run ruff format --check src/
+      - uv run mypy src/tack_ai/
+      - uv run bandit -r src/tack_ai/ -ll
+
+  fmt:
+    desc: Auto-fix formatting and lint issues
+    cmds:
+      - uv run ruff format src/
+      - uv run ruff check --fix src/
+
+  sync:
+    desc: Install all runtime and dev dependencies
+    cmds:
+      - uv sync --all-groups
+
+  migrate:
+    desc: Apply DB migrations (requires postgres running)
+    cmds:
+      - psql "$DATABASE_URL" -f migrations/001_init.sql

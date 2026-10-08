@@ -37,7 +37,7 @@ import uuid
 import warnings
 from typing import Any
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 
 settings = Settings()
 
@@ -247,8 +247,8 @@ async def run_durable(question: str, workflow_id: str | None = None) -> None:
     _init_dbos()
 
     from tack_ai.audit import append, current_run_id, verify_chain  # noqa: PLC0415
-    from tack_ai.models import AuditRecord  # noqa: PLC0415
-    from tack_ai.router import RuleBasedRouter  # noqa: PLC0415
+    from tack_ai.core.models import AuditRecord  # noqa: PLC0415
+    from tack_ai.core.router import RuleBasedRouter  # noqa: PLC0415
 
     run_id = workflow_id or str(uuid.uuid4())
     wf_id = f"tack-ai-{run_id}"

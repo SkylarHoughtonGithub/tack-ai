@@ -6,8 +6,8 @@ from typing import Any
 
 import httpx
 
-from tack_ai.config import Settings
-from tack_ai.models import AuditRecord, PolicyDecision
+from tack_ai.core.config import Settings
+from tack_ai.core.models import AuditRecord, PolicyDecision
 
 settings = Settings()
 
@@ -126,6 +126,7 @@ async def request_approval(tool_name: str, args: dict) -> bool:
 async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool, str]:
     """Run policy check and approval flow. Returns (should_execute, reason)."""
     from tack_ai.audit import append, current_run_id, redact_args
+    from tack_ai.observability import policy_decisions_total, tool_calls_total  # noqa: PLC0415
 
     run_id = current_run_id.get()
 
@@ -133,30 +134,41 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
     # re-running the approval flow. This enables mid-run revocation: deleting
     # the FGA tuple from the approvals page will force re-approval on the next call.
     if run_id and _approval_override.get() is not None:
-        from tack_ai.auth import get_fga_client  # noqa: PLC0415
+        from tack_ai.web.auth import get_fga_client  # noqa: PLC0415
         fga = get_fga_client()
-        if fga is not None and await fga.can_execute(run_id, tool_name):
-            return True, "approved (FGA grant)"
+        if fga is not None:
+            try:
+                if await fga.can_execute(run_id, tool_name):
+                    tool_calls_total.labels(tool_name=tool_name, outcome="fga_grant").inc()
+                    return True, "approved (FGA grant)"
+            except Exception as e:
+                print(f"\n[POLICY] FGA check failed ({e}) — falling through to OPA.")
 
     decision = await policy_check(tool_name, args, user, run_id=run_id)
+    policy_decisions_total.labels(decision=decision.value).inc()
     version = await get_policy_version()
     approver: str | None = None
     approved_at: datetime | None = None
 
     if decision == PolicyDecision.allow:
         ok, reason = True, "allowed"
+        tool_calls_total.labels(tool_name=tool_name, outcome="allowed").inc()
     elif decision == PolicyDecision.deny:
         ok, reason = False, f"policy denied '{tool_name}'"
+        tool_calls_total.labels(tool_name=tool_name, outcome="denied").inc()
     elif decision == PolicyDecision.require_approval:
         approved = await request_approval(tool_name, args)
         approver = user
         approved_at = datetime.now(timezone.utc)
         if approved:
             ok, reason = True, "approved by user"
+            tool_calls_total.labels(tool_name=tool_name, outcome="approved").inc()
         else:
             ok, reason = False, f"user denied '{tool_name}'"
+            tool_calls_total.labels(tool_name=tool_name, outcome="user_denied").inc()
     else:
         ok, reason = False, "unknown policy decision"
+        tool_calls_total.labels(tool_name=tool_name, outcome="unknown").inc()
 
     if run_id:
         await append(AuditRecord(

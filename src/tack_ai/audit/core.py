@@ -7,7 +7,10 @@ from contextvars import ContextVar
 import psycopg
 from psycopg.rows import dict_row
 
-from tack_ai.models import AuditRecord
+from tack_ai.core.models import AuditRecord
+from tack_ai.observability import get_logger
+
+_log = get_logger("tack_ai.audit")
 
 current_run_id: ContextVar[str] = ContextVar("current_run_id", default="")
 
@@ -59,7 +62,7 @@ def _row_to_canonical(row: dict) -> str:
 
 
 def _db_url() -> str | None:
-    from tack_ai.config import Settings  # noqa: PLC0415
+    from tack_ai.core.config import Settings  # noqa: PLC0415
     return Settings().database_url
 
 
@@ -101,6 +104,20 @@ async def append(record: AuditRecord) -> AuditRecord:
                 ),
             )
         await conn.commit()
+
+    _log.info(
+        "audit_event",
+        run_id=record.run_id,
+        actor=record.actor,
+        event_type=record.event_type,
+        tool_name=record.tool_name,
+        policy_decision=record.policy_decision,
+        outcome=record.outcome,
+        model=record.model,
+        provider=record.provider,
+        routing_tier=record.routing_tier,
+        cost_usd=record.cost_usd,
+    )
     return record
 
 

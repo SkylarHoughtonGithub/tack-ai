@@ -49,7 +49,7 @@ try:
 except ImportError:
     _TEMPORAL_AVAILABLE = False
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 
 settings = Settings()
 TASK_QUEUE = "tack-ai-agent"
@@ -62,7 +62,7 @@ if _TEMPORAL_AVAILABLE:
     @activity.defn
     async def routing_activity(question: str) -> dict:
         """Route the question to a model tier.  Runs once; result is checkpointed."""
-        from tack_ai.router import LLMRouter, RuleBasedRouter
+        from tack_ai.core.router import LLMRouter, RuleBasedRouter
 
         if settings.router_type == "llm" and settings.openai_api_key:
             try:

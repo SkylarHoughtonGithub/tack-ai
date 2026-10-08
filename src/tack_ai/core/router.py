@@ -7,7 +7,7 @@ from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
-CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "models.toml"
+CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "models.toml"
 
 
 class RouteTier(str, Enum):

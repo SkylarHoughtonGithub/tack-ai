@@ -56,9 +56,14 @@ subprocess layer that can swallow Ctrl+C.
 
 ## Phase status
 
-**Phases 0–11 complete. P1 enhancements in progress (branch: p1):**
-- Ctrl+C fix: `tack-ai-web` entry point for proper signal handling
-- Reasoning traces: tool calls, results, and thinking surfaced in task timeline
-- CI pipeline: GitHub Actions with ruff, mypy, bandit, pytest, Playwright E2E
-- Multi-turn chat: follow-up messages within a single task thread
-- User management: bcrypt-hashed DB accounts, admin/viewer roles, `/admin/users`
+**Phases 0–11 complete. P1 complete. P2 enhancements in progress (branch: p2):**
+- Module layout: sub-packages `core/`, `policy/`, `audit/`, `web/`, `memory/`; flat shims for backward compat
+- Taskfile.yml: `task dev`, `task opa`, `task web`, `task test`, `task lint`
+- OpenAPI docs: auth-gated `/docs` and `/redoc`
+- Routing config UI: `/admin/settings` — runtime overrides for router type, budget, model tiers
+- Observability: structlog JSON logging, Prometheus `/metrics`, audit CSV/JSON export at `/audit/export`
+- Docker Compose: added `app` + `opa` services, multi-stage Dockerfile, `.dockerignore`
+- CD pipeline: `.github/workflows/cd.yml` — builds and pushes Docker image to GHCR on main
+- Architecture docs: `docs/architecture.md` component map + data flow; ADRs in `docs/decisions/`
+- Agent tool inventory: `docs/agents.md` — all tools, policies, approval requirements
+- OIDC / SSO: `web/oidc.py` — Google, GitHub, or generic OIDC via Authlib; role mapping from claims

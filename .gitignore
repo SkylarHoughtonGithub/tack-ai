@@ -10,4 +10,5 @@ docs/*.md
 docs/*.pdf
 docs/*.docx
 !docs/sample/
+!docs/AGENTS.md
 logs/

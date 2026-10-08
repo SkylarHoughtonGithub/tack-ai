@@ -27,7 +27,7 @@ from typing import Any, Callable
 from mcp import Client, StdioServerParameters
 from mcp.server.mcpserver import MCPServer
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 from tack_ai.policy import enforce
 
 GATEWAY_PORT = 8082

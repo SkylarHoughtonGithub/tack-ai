@@ -1,4 +1,6 @@
 services:
+  # ── Infrastructure ───────────────────────────────────────────────────────────
+
   postgres:
     image: pgvector/pgvector:0.8.7-pg18-trixie
     environment:
@@ -9,7 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql
-      - ./migrations:/docker-entrypoint-initdb.d
+      - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tack_ai"]
       interval: 5s
@@ -20,19 +22,62 @@ services:
     image: openfga/openfga:latest
     command: run
     environment:
-      OPENFGA_DATASTORE_ENGINE: memory
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://tack_ai:tack_ai@postgres:5432/tack_ai
       OPENFGA_HTTP_ADDR: "0.0.0.0:8080"
     ports:
       - "8081:8080"   # HTTP API (8080 reserved for k3d)
       - "3000:3000"   # Playground UI
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "/usr/local/bin/openfga", "healthcheck"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # Phase 9 — Temporal dev server (comparison module).
+  opa:
+    image: openpolicyagent/opa:latest
+    command: ["run", "--server", "--addr", "0.0.0.0:8181", "/policies"]
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./policies:/policies:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8181/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Application ──────────────────────────────────────────────────────────────
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://tack_ai:tack_ai@postgres:5432/tack_ai
+      OPENFGA_URL: http://openfga:8081
+      LOG_JSON: "true"
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opa:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/login')\""]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Phase 9: Durable execution (optional) ────────────────────────────────────
   # Start with: docker compose up temporal temporal-ui
+
   temporal:
     image: temporalio/auto-setup:1.25
     environment:
@@ -42,7 +87,7 @@ services:
       - POSTGRES_PWD=tack_ai
       - POSTGRES_SEEDS=postgres
     ports:
-      - "7233:7233"   # gRPC frontend
+      - "7233:7233"
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,15 +96,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    profiles: ["temporal"]
 
   temporal-ui:
     image: temporalio/ui:2.31
     environment:
       - TEMPORAL_ADDRESS=temporal:7233
     ports:
-      - "8088:8080"   # Temporal Web UI
+      - "8088:8080"
     depends_on:
       - temporal
+    profiles: ["temporal"]
 
 volumes:
   pgdata:

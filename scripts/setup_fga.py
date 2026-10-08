@@ -27,7 +27,7 @@ from openfga_sdk import (
 )
 from openfga_sdk.models import TypeDefinition, Userset
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 
 
 FGA_MODEL = WriteAuthorizationModelRequest(

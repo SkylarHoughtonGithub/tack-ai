@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.github/
+tests/
+evals/
+docs/
+logs/
+.env
+.env.*
+!.env.example
+*.log
+*.jsonl
+config/runtime_settings.json

@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     # "cedar" — tool-authorization through Cedar; routing/budget still through OPA
     policy_engine: str = "opa"
 
+    # P2 — OIDC / SSO (optional; username/password works without these)
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_provider: str = "google"       # google | github | oidc
+    oidc_redirect_base: str = "http://localhost:8000"
+    oidc_discovery_url: str | None = None   # required when oidc_provider=oidc
+    oidc_admin_emails: str = ""             # comma-separated admin email addresses
+    oidc_default_role: str = "viewer"
+
+    # P2 — log level (runtime-configurable without restart via LOG_LEVEL env var)
+    log_level: str = "INFO"
+    log_json: bool = True
+
     def available_providers(self) -> list[str]:
         return [
             attr.replace("_api_key", "")

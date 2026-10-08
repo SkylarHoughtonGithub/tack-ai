@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from tack_ai.models import AuditRecord, PolicyDecision, Task, TaskPriority, ToolCall
+from tack_ai.core.models import AuditRecord, PolicyDecision, Task, TaskPriority, ToolCall
 
 
 def test_task_defaults():

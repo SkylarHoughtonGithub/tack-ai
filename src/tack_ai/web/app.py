@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -39,22 +40,50 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from tack_ai.audit import append, query_records, verify_chain
-from tack_ai.auth import UserManager, get_fga_client
-from tack_ai.config import Settings
-from tack_ai.models import AuditRecord, PolicyDecision
+from tack_ai.core.config import Settings
+from tack_ai.core.models import AuditRecord, PolicyDecision
+from tack_ai.observability import configure_logging, configure_tracing, get_logger, tasks_total
 from tack_ai.policy import _approval_override
+from tack_ai.web.auth import UserManager, ensure_fga_client, get_fga_client
+
+_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+_LOG_JSON = os.environ.get("LOG_JSON", "true").lower() not in ("0", "false", "no")
+configure_logging(json=_LOG_JSON, level=_LOG_LEVEL)
+log = get_logger("tack_ai.web")
 
 settings = Settings()
 
-TEMPLATES_DIR = Path(__file__).parents[2] / "templates"
+TEMPLATES_DIR = Path(__file__).parents[3] / "templates"
 
-app = FastAPI(title="Tack-AI Console")
+
+@asynccontextmanager
+async def lifespan(fastapi_app: FastAPI) -> None:
+    # Tracing — OTLP exporter wired up before any requests arrive.
+    configure_tracing()
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # noqa: PLC0415
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor  # noqa: PLC0415
+    from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor  # noqa: PLC0415
+    FastAPIInstrumentor.instrument_app(fastapi_app)
+    HTTPXClientInstrumentor().instrument()
+    PsycopgInstrumentor().instrument()
+
+    await ensure_fga_client()
+    yield
+
+    FastAPIInstrumentor.uninstrument_app(fastapi_app)
+    HTTPXClientInstrumentor().uninstrument()
+
+
+app = FastAPI(title="Tack-AI Console", docs_url=None, redoc_url=None, lifespan=lifespan)
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 SESSION_TTL = timedelta(hours=24)
@@ -184,6 +213,46 @@ _pending_approvals: dict[str, dict[str, Any]] = {}
 
 _HIGH_RISK_TOOLS = {"run_code", "send_email", "delete_file"}
 
+# ── Runtime settings ─────────────────────────────────────────────────────────
+# Admins can override routing config at runtime without restarting. Changes
+# are persisted to config/runtime_settings.json and survive process restarts.
+
+_RUNTIME_SETTINGS_PATH = Path(__file__).parents[3] / "config" / "runtime_settings.json"
+
+
+def _load_runtime_settings() -> dict[str, Any]:
+    if _RUNTIME_SETTINGS_PATH.exists():
+        try:
+            return json.loads(_RUNTIME_SETTINGS_PATH.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_runtime_settings(data: dict[str, Any]) -> None:
+    _RUNTIME_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _RUNTIME_SETTINGS_PATH.write_text(json.dumps(data, indent=2))
+
+
+_runtime: dict[str, Any] = _load_runtime_settings()
+
+
+def _effective_router_type() -> str:
+    return str(_runtime.get("router_type", settings.router_type))
+
+
+def _effective_budget() -> float:
+    return float(_runtime.get("task_budget_usd", settings.task_budget_usd))
+
+
+def _effective_model_config() -> dict[str, Any]:
+    from tack_ai.core.router import load_model_config  # noqa: PLC0415
+    base = load_model_config()
+    for tier, model in _runtime.get("model_overrides", {}).items():
+        if tier in base.get("tiers", {}):
+            base["tiers"][tier] = model
+    return base
+
 
 # ── Reasoning trace ───────────────────────────────────────────────────────────
 
@@ -297,7 +366,7 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
         agent,
     )
     from tack_ai.audit import current_run_id  # noqa: PLC0415
-    from tack_ai.router import LLMRouter, RuleBasedRouter, load_model_config  # noqa: PLC0415
+    from tack_ai.core.router import LLMRouter, RuleBasedRouter  # noqa: PLC0415
 
     q = question or state.current_question
     turn_idx = state.start_turn(q)
@@ -311,9 +380,9 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
         await _preflight(state)
 
     try:
-        model_config = load_model_config()
+        model_config = _effective_model_config()
         state.push({"type": "status", "message": "Routing…"})
-        if settings.router_type == "llm" and settings.openai_api_key:
+        if _effective_router_type() == "llm" and settings.openai_api_key:
             try:
                 route = await LLMRouter(
                     model_str=model_config["router"]["decision"],
@@ -438,17 +507,19 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
             "turn_index": turn_idx,
         })
         state.end_turn(out["summary"])
+        tasks_total.labels(status="completed").inc()
         # Conversation stays open for follow-up
         state.status = "waiting_follow_up"
 
     except asyncio.CancelledError:
         state.push({"type": "error", "message": "Task cancelled by user."})
         state.status = "cancelled"
+        tasks_total.labels(status="cancelled").inc()
         state.push({"type": "done"})
     except Exception as exc:
         msg = str(exc)
         if "All connection attempts failed" in msg or "Client failed to connect" in msg:
-            from tack_ai.config import Settings as _S  # noqa: PLC0415
+            from tack_ai.core.config import Settings as _S  # noqa: PLC0415
             cfg = _S()
             if cfg.mcp_gateway_url:
                 msg = (
@@ -458,6 +529,7 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
                 )
         state.push({"type": "error", "message": msg})
         state.status = "failed"
+        tasks_total.labels(status="failed").inc()
         state.push({"type": "done"})
 
 
@@ -465,7 +537,13 @@ async def _run_agent_bg(run_id: str, state: RunState, question: str | None = Non
 
 @app.get("/login")
 async def login_page(request: Request, error: str = "") -> Response:
-    return templates.TemplateResponse(request, "login.html", {"user": None, "error": error})
+    from tack_ai.web.oidc import OIDC_ENABLED, OIDC_PROVIDER  # noqa: PLC0415
+    return templates.TemplateResponse(request, "login.html", {
+        "user": None,
+        "error": error,
+        "oidc_enabled": OIDC_ENABLED,
+        "oidc_provider": OIDC_PROVIDER,
+    })
 
 
 @app.post("/login")
@@ -485,6 +563,64 @@ async def login_post(
     )
     redir = RedirectResponse("/", status_code=303)
     redir.set_cookie("session", token, httponly=True, samesite="lax")
+    return redir
+
+
+@app.get("/auth/login")
+async def oidc_login(request: Request) -> Response:
+    """Redirect to the OIDC provider's authorization endpoint."""
+    from tack_ai.web.oidc import OIDC_ENABLED, get_authorization_url  # noqa: PLC0415
+    if not OIDC_ENABLED:
+        return RedirectResponse("/login?error=OIDC+not+configured", status_code=303)
+    state = secrets.token_urlsafe(16)
+    # Store state in a short-lived cookie to prevent CSRF
+    authorization_url = await get_authorization_url(state)
+    redir = RedirectResponse(authorization_url, status_code=302)
+    redir.set_cookie("oidc_state", state, httponly=True, samesite="lax", max_age=300)
+    return redir
+
+
+@app.get("/auth/callback")
+async def oidc_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+) -> Response:
+    """Handle the OIDC provider callback and establish a session."""
+    from tack_ai.web.oidc import OIDC_ENABLED, resolve_identity  # noqa: PLC0415
+    if not OIDC_ENABLED:
+        return RedirectResponse("/login?error=OIDC+not+configured", status_code=303)
+
+    if error:
+        return RedirectResponse(f"/login?error=OIDC+error:+{error[:80]}", status_code=303)
+
+    stored_state = request.cookies.get("oidc_state", "")
+    if not state or state != stored_state:
+        return RedirectResponse("/login?error=State+mismatch+—+possible+CSRF", status_code=303)
+
+    if not code:
+        return RedirectResponse("/login?error=No+authorization+code", status_code=303)
+
+    try:
+        username, role = await resolve_identity(code)
+    except Exception as exc:
+        log.warning("oidc_callback_failed", error=str(exc))
+        return RedirectResponse(
+            f"/login?error=OIDC+authentication+failed:+{str(exc)[:80]}",
+            status_code=303,
+        )
+
+    token = secrets.token_urlsafe(32)
+    _sessions[token] = _Session(
+        username=username,
+        role=role,
+        expires_at=datetime.now(timezone.utc) + SESSION_TTL,
+    )
+    log.info("oidc_login", username=username, role=role)
+    redir = RedirectResponse("/", status_code=303)
+    redir.set_cookie("session", token, httponly=True, samesite="lax")
+    redir.delete_cookie("oidc_state")
     return redir
 
 
@@ -846,6 +982,133 @@ async def admin_delete_user(
             status_code=303,
         )
     return RedirectResponse("/admin/users", status_code=303)
+
+
+# ── Admin settings ────────────────────────────────────────────────────────────
+
+@app.get("/admin/settings")
+async def admin_settings(request: Request, user: str = Depends(_require_admin)) -> Response:
+    from tack_ai.core.router import load_model_config  # noqa: PLC0415
+    base_config = load_model_config()
+    effective = _effective_model_config()
+    return templates.TemplateResponse(request, "admin_settings.html", {
+        "user": user,
+        "role": "admin",
+        "router_type": _effective_router_type(),
+        "task_budget_usd": _effective_budget(),
+        "tiers": effective.get("tiers", {}),
+        "base_tiers": base_config.get("tiers", {}),
+        "overrides": _runtime.get("model_overrides", {}),
+        "router_decision": effective.get("router", {}).get("decision", ""),
+        "success": request.query_params.get("success"),
+        "error": request.query_params.get("error"),
+    })
+
+
+@app.post("/admin/settings")
+async def admin_settings_save(
+    request: Request,
+    router_type: str = Form(...),
+    task_budget_usd: float = Form(...),
+    simple_model: str = Form(...),
+    general_model: str = Form(...),
+    deep_reasoning_model: str = Form(...),
+    user: str = Depends(_require_admin),
+) -> Response:
+    if router_type not in ("llm", "rule_based"):
+        return RedirectResponse("/admin/settings?error=Invalid+router_type", status_code=303)
+    if task_budget_usd <= 0:
+        return RedirectResponse("/admin/settings?error=Budget+must+be+positive", status_code=303)
+
+    from tack_ai.core.router import load_model_config  # noqa: PLC0415
+    base = load_model_config()
+
+    overrides: dict[str, str] = {}
+    for tier, new_model in [
+        ("simple", simple_model.strip()),
+        ("general", general_model.strip()),
+        ("deep_reasoning", deep_reasoning_model.strip()),
+    ]:
+        if new_model and new_model != base.get("tiers", {}).get(tier, ""):
+            overrides[tier] = new_model
+
+    _runtime["router_type"] = router_type
+    _runtime["task_budget_usd"] = task_budget_usd
+    _runtime["model_overrides"] = overrides
+    _save_runtime_settings(_runtime)
+    return RedirectResponse("/admin/settings?success=1", status_code=303)
+
+
+@app.post("/admin/settings/reset")
+async def admin_settings_reset(
+    request: Request,
+    user: str = Depends(_require_admin),
+) -> Response:
+    _runtime.clear()
+    if _RUNTIME_SETTINGS_PATH.exists():
+        _RUNTIME_SETTINGS_PATH.unlink()
+    return RedirectResponse("/admin/settings?success=1", status_code=303)
+
+
+# ── Metrics & observability ───────────────────────────────────────────────────
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint(user: str = Depends(_auth)) -> Response:
+    """Prometheus text-format metrics. Auth-gated (any authenticated user)."""
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # noqa: PLC0415
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
+
+# ── Audit export ──────────────────────────────────────────────────────────────
+
+@app.get("/audit/export")
+async def audit_export(
+    request: Request,
+    fmt: str = "json",
+    run_id: str = "",
+    actor: str = "",
+    tool: str = "",
+    limit: int = 1000,
+    user: str = Depends(_auth),
+) -> Response:
+    """Download audit records as JSON or CSV."""
+    from tack_ai.audit import query_records  # noqa: PLC0415
+    records, _total = await query_records(run_id=run_id, actor=actor, tool=tool, limit=limit)
+
+    if fmt == "csv":
+        import csv  # noqa: PLC0415
+        import io  # noqa: PLC0415
+        buf = io.StringIO()
+        if records:
+            writer = csv.DictWriter(buf, fieldnames=list(records[0].keys()))
+            writer.writeheader()
+            writer.writerows(records)
+        return Response(
+            content=buf.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=audit.csv"},
+        )
+
+    return Response(
+        content=json.dumps(records, default=str, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=audit.json"},
+    )
+
+
+# ── API docs (auth-gated) ─────────────────────────────────────────────────────
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui(user: str = Depends(_auth)) -> Response:
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="Tack-AI API Docs")
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_ui(user: str = Depends(_auth)) -> Response:
+    return get_redoc_html(openapi_url="/openapi.json", title="Tack-AI API Docs")
 
 
 # ── Entry point (P1: Ctrl+C fix) ──────────────────────────────────────────────

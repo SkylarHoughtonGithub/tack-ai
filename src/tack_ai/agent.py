@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -20,19 +20,22 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from tack_ai import audit
 from tack_ai.audit import append, current_run_id
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
+from tack_ai.core.models import AuditRecord
+from tack_ai.core.router import ExecutionPath, LLMRouter, Route, RuleBasedRouter, load_model_config
 from tack_ai.memory import ConversationMemory
-from tack_ai.models import AuditRecord
-from tack_ai.policy import enforce
-from tack_ai.retrieval import format_for_prompt
-from tack_ai.retrieval import search_documents as _search_documents
-from tack_ai.router import ExecutionPath, LLMRouter, Route, RuleBasedRouter, load_model_config
-
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    level=logging.INFO,
+from tack_ai.memory.retrieval import format_for_prompt
+from tack_ai.memory.retrieval import search_documents as _search_documents
+from tack_ai.observability import (
+    configure_logging,
+    get_logger,
 )
-log = logging.getLogger("tack_ai.agent")
+from tack_ai.policy import enforce
+
+_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+_LOG_JSON = os.environ.get("LOG_JSON", "true").lower() not in ("0", "false", "no")
+configure_logging(json=_LOG_JSON, level=_LOG_LEVEL)
+log = get_logger("tack_ai.agent")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOGS_DIR = PROJECT_ROOT / "logs"

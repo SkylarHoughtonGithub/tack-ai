@@ -14,7 +14,7 @@ import sys
 
 from mcp.server.mcpserver import MCPServer
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 from tack_ai.policy import enforce
 
 settings = Settings()
@@ -35,9 +35,9 @@ async def search_documents(query: str, user: str = "user") -> str:
     if not settings.openfga_store_id or not settings.openfga_model_id:
         return "Document search not configured (OPENFGA_STORE_ID or OPENFGA_MODEL_ID missing)."
 
-    from tack_ai.auth import FGAClient
-    from tack_ai.retrieval import format_for_prompt
-    from tack_ai.retrieval import search_documents as _search
+    from tack_ai.memory.retrieval import format_for_prompt
+    from tack_ai.memory.retrieval import search_documents as _search
+    from tack_ai.web.auth import FGAClient
 
     fga = FGAClient(
         api_url=settings.openfga_url,
