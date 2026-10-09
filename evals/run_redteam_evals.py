@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from tack_ai.models import PolicyDecision
+from tack_ai.core.models import PolicyDecision
 from tack_ai.policy import policy_check
 
 # ---------------------------------------------------------------------------
@@ -150,34 +150,22 @@ CASES: list[RedTeamCase] = [
 
 async def run_case(case: RedTeamCase) -> tuple[bool, str]:
     """Returns (passed, detail_line)."""
-    result = await policy_check(
-        tool_name=case.tool_name,
-        args=case.args,
-        run_id=None,
-        # Manually inject prior_tool context to simulate mid-run state.
-        # policy_check reads from _prior_tool[run_id], which is None here,
-        # so we patch the input by calling the private helper directly.
-    )
-    # policy_check tracks prior_tool per run_id. Since run_id=None here we
-    # can't simulate a prior tool via the normal flow, so we send a separate
-    # check first if a prior_tool is specified.
     if case.prior_tool:
-        await policy_check(
-            tool_name=case.prior_tool,
-            args={},
-            run_id=case.name,  # use case name as a stable run_id
+        # Seed the prior-tool context for this run_id first, then make the real check.
+        await policy_check(tool_name=case.prior_tool, args={}, run_id=case.name)
+        decision, _ = await policy_check(
+            tool_name=case.tool_name, args=case.args, run_id=case.name
         )
-        result = await policy_check(
-            tool_name=case.tool_name,
-            args=case.args,
-            run_id=case.name,
+    else:
+        decision, _ = await policy_check(
+            tool_name=case.tool_name, args=case.args, run_id=None
         )
 
-    passed = result == case.expected
+    passed = decision == case.expected
     status = "PASS" if passed else "FAIL"
     detail = (
         f"  [{status}] {case.name}\n"
-        f"         expected={case.expected.value}  got={result.value}\n"
+        f"         expected={case.expected.value}  got={decision.value}\n"
         f"         {case.description}"
     )
     return passed, detail

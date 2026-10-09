@@ -1,6 +1,6 @@
 # Security Model
 
-Phase 8 threat model for the tack-ai agent harness.
+Threat model for the tack-ai agent harness.
 
 ## Assets
 

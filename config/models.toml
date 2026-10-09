@@ -4,9 +4,9 @@ decision = "openai:gpt-4o-mini"
 [tiers]
 simple         = "openai:gpt-4o-mini"
 general        = "anthropic:claude-sonnet-4-6"
-deep_reasoning = "anthropic:claude-sonnet-4-6"
+deep_reasoning = "anthropic:claude-opus-4-7"
 
 [fallbacks]
 simple         = ["anthropic:claude-haiku-4-5-20251001"]
-general        = ["openai:gpt-4o"]
-deep_reasoning = ["openai:gpt-4o"]
+general        = ["openai:gpt-5.2-terra"]
+deep_reasoning = ["openai:gpt-5.6-sol"]

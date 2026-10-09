@@ -39,6 +39,18 @@ test_write_file_root_requires_approval if {
     }
 }
 
+# ── Code search ──────────────────────────────────────────────────────────────
+
+test_search_code_chunks_allowed if {
+    decision == "allow" with input as {"tool_name": "search_code_chunks", "args": {"query": "auth middleware"}}
+}
+
+# ── Test runner ───────────────────────────────────────────────────────────────
+
+test_run_tests_allowed if {
+    decision == "allow" with input as {"tool_name": "run_tests", "args": {}}
+}
+
 # ── Code execution ────────────────────────────────────────────────────────────
 
 test_run_code_requires_approval if {

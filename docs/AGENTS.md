@@ -3,7 +3,7 @@
 This document is the canonical reference for every tool the tack-ai agent can call, the
 policy tier that governs it, and what approval is required.
 
-The policy engine (OPA by default; Cedar in Phase 11 comparison mode) evaluates each tool
+The policy engine (OPA by default; Cedar for the tool-authorization subset) evaluates each tool
 call before it executes. The decision is one of `allow`, `deny`, or `require_approval`.
 `require_approval` pauses the agent and waits for a human to click Approve or Deny in the
 web console (or type `y`/`n` in the CLI).
@@ -216,8 +216,7 @@ model proposes tool call
    execute tool
 ```
 
-Cedar is used only for tool-authorization comparisons (Phase 11). Routing and budget
-decisions always go through OPA.
+Cedar covers tool-authorization only. Routing and budget decisions always go through OPA.
 
 ## Adding a new tool
 

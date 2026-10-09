@@ -1,11 +1,13 @@
 import tomllib
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
+
+if TYPE_CHECKING:
+    from tack_ai.core.config import Settings
 
 CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "models.toml"
 
@@ -34,6 +36,55 @@ class Route(BaseModel):
     reason: str
 
 
+def build_model(model_str: str, settings: "Settings") -> Any:
+    """Construct a PydanticAI model object from a 'provider:name' string."""
+    provider, model_name = model_str.split(":", 1)
+    if provider == "anthropic":
+        from pydantic_ai.models.anthropic import AnthropicModel
+        from pydantic_ai.providers.anthropic import AnthropicProvider
+
+        return AnthropicModel(
+            model_name,
+            provider=AnthropicProvider(api_key=settings.get_key("anthropic")),
+        )
+    if provider == "openai":
+        from pydantic_ai.models.openai import OpenAIChatModel
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        return OpenAIChatModel(
+            model_name,
+            provider=OpenAIProvider(api_key=settings.get_key("openai")),
+        )
+    if provider == "typesafe":
+        from pydantic_ai.models.typesafe import TypeSafeModel
+        from pydantic_ai.providers.typesafe import TypeSafeProvider
+
+        return TypeSafeModel(
+            model_name,
+            provider=TypeSafeProvider(api_key=settings.get_key("typesafe")),
+        )
+    raise ValueError(f"Unknown provider '{provider}' in model string '{model_str}'")
+
+
+def make_run_settings(model_str: str) -> Any | None:
+    """Return provider-appropriate ModelSettings for a run, or None if not needed."""
+    provider = model_str.split(":", 1)[0]
+    if provider == "anthropic":
+        from pydantic_ai.models.anthropic import AnthropicModelSettings
+
+        return AnthropicModelSettings(
+            anthropic_cache_instructions=True,
+            anthropic_cache_tool_definitions=True,
+        )
+    if provider == "openai":
+        from pydantic_ai.models.openai import OpenAIChatModelSettings
+
+        # 24h extended retention; parallel tool calls are on by default in the OpenAI API.
+        return OpenAIChatModelSettings(openai_prompt_cache_retention="24h")
+    # typesafe: no special settings needed — Jev has no caching knobs exposed here.
+    return None
+
+
 def load_model_config() -> dict:
     with open(CONFIG_PATH, "rb") as f:
         return tomllib.load(f)
@@ -59,12 +110,8 @@ class RuleBasedRouter:
 class LLMRouter:
     """Classifies tasks using the model configured at router.decision in models.toml."""
 
-    def __init__(self, model_str: str, openai_api_key: str) -> None:
-        _, model_name = model_str.split(":", 1)
-        model = OpenAIChatModel(
-            model_name,
-            provider=OpenAIProvider(api_key=openai_api_key),
-        )
+    def __init__(self, model_str: str, settings: "Settings") -> None:
+        model = build_model(model_str, settings)
         self._agent: Agent[None, Route] = Agent(
             model,
             output_type=Route,

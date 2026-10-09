@@ -42,9 +42,10 @@ OIDC_PROVIDER = os.environ.get("OIDC_PROVIDER", "google").lower()
 OIDC_REDIRECT_BASE = os.environ.get("OIDC_REDIRECT_BASE", "http://localhost:8000").rstrip("/")
 OIDC_DISCOVERY_URL = os.environ.get("OIDC_DISCOVERY_URL", "")
 OIDC_DEFAULT_ROLE = os.environ.get("OIDC_DEFAULT_ROLE", "viewer")
-_ADMIN_EMAILS = {
+OIDC_ADMIN_EMAILS: set[str] = {
     e.strip().lower() for e in os.environ.get("OIDC_ADMIN_EMAILS", "").split(",") if e.strip()
 }
+_ADMIN_EMAILS = OIDC_ADMIN_EMAILS
 
 OIDC_ENABLED = bool(OIDC_CLIENT_ID and OIDC_CLIENT_SECRET)
 

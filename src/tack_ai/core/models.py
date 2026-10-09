@@ -48,9 +48,13 @@ class AuditRecord(BaseModel):
     # Policy
     policy_decision: PolicyDecision | None = None
     policy_version: str | None = None
+    policy_rule: str | None = None
     # Approval
     approver: str | None = None
     approved_at: datetime | None = None
+    # Graph workflow
+    graph_node: str | None = None  # "plan" | "edit" | "review" | "test" | "gate"
+    decision_confidence: float | None = None  # populated by GateNode
     # Outcome
     outcome: str | None = None
     cost_usd: float | None = None

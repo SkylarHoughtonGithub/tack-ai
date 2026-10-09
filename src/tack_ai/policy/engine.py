@@ -21,11 +21,19 @@ _approval_override: ContextVar[Callable[[str, dict[str, Any]], Awaitable[bool]] 
     ContextVar("_approval_override", default=None)
 )
 
-OPA_URL = "http://localhost:8181"
-_DECISION_PATH = "/v1/data/tack/policy/decision"
-_VERSION_PATH = "/v1/data/tack/policy/policy_version"
+_POLICY_PATH = "/v1/data/tack/policy"  # returns decision + rule + policy_version in one call
 
 _cached_version: str | None = None
+
+
+def _opa_url() -> str:
+    return settings.opa_url
+
+
+def reload_policy_version() -> None:
+    """Invalidate the cached policy version so the next call fetches fresh from OPA."""
+    global _cached_version
+    _cached_version = None
 
 # Tracks the most recent tool name per run_id for multi-step (confused-deputy) detection.
 _prior_tool: dict[str, str] = {}
@@ -37,9 +45,13 @@ async def get_policy_version() -> str:
         return _cached_version
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{OPA_URL}{_VERSION_PATH}")
+            resp = await client.post(
+                f"{_opa_url()}{_POLICY_PATH}",
+                json={"input": {"tool_name": "__version__", "args": {}, "user": "system", "context": {}}},
+            )
             resp.raise_for_status()
-            _cached_version = str(resp.json().get("result", "unknown"))
+            result = resp.json().get("result", {})
+            _cached_version = str(result.get("policy_version", "unknown"))
             return _cached_version
     except Exception:
         return "unknown"
@@ -76,20 +88,21 @@ async def policy_check(
     }
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.post(f"{OPA_URL}{_DECISION_PATH}", json=payload)
+            resp = await client.post(f"{_opa_url()}{_POLICY_PATH}", json=payload)
             resp.raise_for_status()
-            result = PolicyDecision(resp.json().get("result", "deny"))
-            # Record this tool as the prior for the next call in the same run.
+            opa_result = resp.json().get("result", {})
+            decision = PolicyDecision(opa_result.get("decision", "deny"))
+            fired_rule = opa_result.get("rule", "unknown")
             if run_id:
                 _prior_tool[run_id] = tool_name
-            return result
+            return decision, fired_rule
     except httpx.ConnectError:
         print("\n[POLICY] OPA is not reachable — failing closed (deny).")
-        print("  Start OPA with: opa run --server --addr :8181 policies/")
-        return PolicyDecision.deny
+        print(f"  Start OPA with: opa run --server --addr :8181 policies/  (OPA_URL={_opa_url()})")
+        return PolicyDecision.deny, "opa_unreachable"
     except Exception as e:
         print(f"\n[POLICY] Unexpected error contacting OPA ({e}) — failing closed.")
-        return PolicyDecision.deny
+        return PolicyDecision.deny, "opa_error"
 
 
 async def request_approval(tool_name: str, args: dict) -> bool:
@@ -119,7 +132,11 @@ async def request_approval(tool_name: str, args: dict) -> bool:
         print(f"  {k}: {v}")
     print(f"{'─' * 50}")
     loop = asyncio.get_event_loop()
-    answer = await loop.run_in_executor(None, lambda: input("  Approve? [y/N]: "))
+    try:
+        answer = await loop.run_in_executor(None, lambda: input("  Approve? [y/N]: "))
+    except EOFError:
+        print("  → Denied (no stdin)\n")
+        return False
     approved = answer.strip().lower() == "y"
     print(f"  → {'Approved' if approved else 'Denied'}\n")
     return approved
@@ -147,7 +164,7 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
             except Exception as e:
                 print(f"\n[POLICY] FGA check failed ({e}) — falling through to OPA.")
 
-    decision = await policy_check(tool_name, args, user, run_id=run_id)
+    decision, fired_rule = await policy_check(tool_name, args, user, run_id=run_id)
     policy_decisions_total.labels(decision=decision.value).inc()
     version = await get_policy_version()
     approver: str | None = None
@@ -183,6 +200,7 @@ async def enforce(tool_name: str, args: dict, user: str = "user") -> tuple[bool,
                 tool_args=redact_args(args),
                 policy_decision=decision,
                 policy_version=version,
+                policy_rule=fired_rule,
                 approver=approver,
                 approved_at=approved_at,
                 outcome="executed" if ok else "blocked",

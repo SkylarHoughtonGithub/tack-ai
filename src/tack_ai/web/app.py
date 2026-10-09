@@ -1,26 +1,24 @@
 """
-Phase 10 — Web console for the AI agent harness.
+Web console — compliance surface for tack-ai.
 
 Routes
 ------
-GET  /                    Home: submit task + dashboard
+GET  /                    Dashboard (links to key surfaces)
+GET  /chat                PydanticAI native chat UI (agent.to_web(), auth-gated)
 GET  /login               Login form
 POST /login               Authenticate and set session cookie
 GET  /logout              Clear session
-POST /tasks               Submit a new task (form)
-GET  /tasks/{id}          Task detail page (multi-turn thread)
-GET  /tasks/{id}/stream   SSE stream of task events
-POST /tasks/{id}/message  Submit a follow-up message to a live thread
-POST /tasks/{id}/close    End the conversation
-POST /tasks/{id}/cancel   Cancel in-progress turn
-GET  /approvals           Pending approvals page
+GET  /approvals           Pending approvals
 POST /approvals/{id}/approve
 POST /approvals/{id}/deny
-GET  /audit               Audit browser with chain-verify status
-GET  /history             Conversation history
+GET  /audit               Audit trail browser with chain-verify status
 GET  /admin/users         User management (admin only)
 POST /admin/users         Create a user (admin only)
 POST /admin/users/{u}/delete  Delete a user (admin only)
+GET  /admin/settings      Routing & policy settings
+POST /admin/settings      Save settings
+POST /admin/settings/reset  Reset to defaults
+POST /admin/policy/reload Invalidate cached OPA policy version
 
 Start with:
     uv run tack-ai-web
@@ -30,11 +28,9 @@ Start with:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import secrets
-import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -43,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
@@ -51,8 +47,8 @@ from markupsafe import Markup
 from tack_ai.audit import append, query_records, verify_chain
 from tack_ai.core.config import Settings
 from tack_ai.core.models import AuditRecord, PolicyDecision
-from tack_ai.observability import configure_logging, configure_tracing, get_logger, tasks_total
-from tack_ai.policy import _approval_override
+from tack_ai.observability import configure_logging, configure_tracing, get_logger
+from tack_ai.policy import reload_policy_version
 from tack_ai.web.auth import UserManager, ensure_fga_client, get_fga_client
 
 _LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -88,7 +84,57 @@ app = FastAPI(title="Tack-AI Console", docs_url=None, redoc_url=None, lifespan=l
 app.mount("/static/img", StaticFiles(directory=str(TEMPLATES_DIR / "img")), name="static_img")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+
+_db_status_cache: dict[str, Any] = {"ok": True, "checked_at": None}
+_DB_CACHE_TTL = 30  # seconds
+
+
+async def _check_db() -> bool:
+    import time  # noqa: PLC0415
+
+    now = time.monotonic()
+    if _db_status_cache["checked_at"] is not None and now - _db_status_cache["checked_at"] < _DB_CACHE_TTL:
+        return _db_status_cache["ok"]
+    if not settings.database_url:
+        _db_status_cache.update(ok=True, checked_at=now)
+        return True
+    try:
+        import psycopg  # noqa: PLC0415
+
+        async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
+            await conn.execute("SELECT 1")
+        _db_status_cache.update(ok=True, checked_at=now)
+        return True
+    except Exception:
+        _db_status_cache.update(ok=False, checked_at=now)
+        return False
+
+
+@app.middleware("http")
+async def _inject_db_status(request: Request, call_next: Any) -> Response:
+    request.state.db_ok = await _check_db()
+    return await call_next(request)
+
 SESSION_TTL = timedelta(hours=24)
+
+
+@app.middleware("http")
+async def _chat_auth_middleware(request: Request, call_next: Any) -> Response:
+    """Gate the PydanticAI chat UI behind the same session cookie as the rest of the app.
+
+    The chat HTML is served by the catch-all sub-app mount at '/'.  Its JS bundle
+    uses absolute paths /api/chat and /api/configure — we block those here so the
+    API is inaccessible without a valid session, matching the rest of the console.
+    """
+    path = request.url.path
+    if path in ("/api/chat", "/api/configure") or path.startswith("/chat"):
+        token = request.cookies.get("session", "")
+        sess = _sessions.get(token)
+        if not sess or sess.expires_at < datetime.now(timezone.utc):
+            if path in ("/api/chat", "/api/configure"):
+                return Response("Unauthorized", status_code=401)
+            return RedirectResponse("/login", status_code=303)
+    return await call_next(request)
 
 
 @app.exception_handler(401)
@@ -174,48 +220,7 @@ def _get_user_manager() -> UserManager:
     return _user_manager
 
 
-# ── Run state ─────────────────────────────────────────────────────────────────
-
-
-class RunState:
-    def __init__(self, run_id: str, question: str, username: str) -> None:
-        self.run_id = run_id
-        self.username = username
-        self.status = "running"  # running | waiting_follow_up | closed | failed | cancelled
-        self.events: list[dict[str, Any]] = []
-        self.started_at = datetime.now(timezone.utc).isoformat()
-        self.total_cost_usd: float = 0.0
-        self.tier: str | None = None
-        self.approved_tools: set[str] = set()
-        self.task: asyncio.Task | None = None
-        # Multi-turn thread
-        self.turns: list[dict[str, Any]] = []  # [{question, answer, start_idx}]
-        self.current_question: str = question
-        # Legacy compat for dashboard display
-        self.question: str = question
-        self.cost_usd: float | None = None  # cost of last turn
-
-    def push(self, event: dict[str, Any]) -> None:
-        event.setdefault("ts", datetime.now(timezone.utc).isoformat())
-        self.events.append(event)
-
-    def start_turn(self, question: str) -> int:
-        turn_idx = len(self.turns)
-        self.turns.append({"question": question, "answer": None, "start_idx": len(self.events)})
-        self.current_question = question
-        self.push({"type": "turn_start", "turn_index": turn_idx, "question": question})
-        return turn_idx
-
-    def end_turn(self, answer: str | None = None) -> None:
-        if self.turns:
-            self.turns[-1]["answer"] = answer
-        self.push({"type": "turn_end"})
-
-
-_runs: dict[str, RunState] = {}
 _pending_approvals: dict[str, dict[str, Any]] = {}
-
-_HIGH_RISK_TOOLS = {"run_code", "send_email", "delete_file"}
 
 # ── Runtime settings ─────────────────────────────────────────────────────────
 # Admins can override routing config at runtime without restarting. Changes
@@ -257,314 +262,6 @@ def _effective_model_config() -> dict[str, Any]:
         if tier in base.get("tiers", {}):
             base["tiers"][tier] = model
     return base
-
-
-# ── Reasoning trace ───────────────────────────────────────────────────────────
-
-
-def _extract_trace(messages: list[Any]) -> list[dict[str, Any]]:
-    """
-    Walk a message list and convert tool calls, results, and reasoning text
-    into push-able event dicts. Accepts the list directly so it works for
-    both successful runs and partial traces captured on failure.
-    """
-    events: list[dict[str, Any]] = []
-    for msg in messages:
-        for part in msg.parts:
-            ptype = part.__class__.__name__
-            if ptype == "ToolCallPart":
-                events.append(
-                    {
-                        "type": "tool_call",
-                        "tool_name": getattr(part, "tool_name", "?"),
-                        "args": str(getattr(part, "args", ""))[:300],
-                    }
-                )
-            elif ptype == "ToolReturnPart":
-                events.append(
-                    {
-                        "type": "tool_result",
-                        "tool_name": getattr(part, "tool_name", "?"),
-                        "content": str(getattr(part, "content", ""))[:300],
-                    }
-                )
-            elif ptype == "ThinkingPart":
-                thinking = str(getattr(part, "thinking", "")).strip()
-                if thinking:
-                    events.append({"type": "reasoning", "content": thinking[:2000]})
-            elif ptype == "TextPart":
-                text = str(getattr(part, "content", "")).strip()
-                if text:
-                    events.append({"type": "reasoning", "content": text[:2000]})
-    return events
-
-
-# ── Background runner ─────────────────────────────────────────────────────────
-
-
-async def _web_request_approval(
-    tool_name: str, args: dict[str, Any], run_id: str, state: RunState
-) -> bool:
-    if tool_name in state.approved_tools:
-        return True
-
-    approval_id = f"{run_id[:8]}:{tool_name}:{uuid.uuid4().hex[:6]}"
-    done = asyncio.Event()
-    _pending_approvals[approval_id] = {
-        "approval_id": approval_id,
-        "done": done,
-        "approved": False,
-        "tool_name": tool_name,
-        "args": {k: str(v)[:300] for k, v in args.items()},
-        "run_id": run_id,
-        "actor": state.username,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "approver": None,
-    }
-    state.push(
-        {
-            "type": "approval_required",
-            "approval_id": approval_id,
-            "tool_name": tool_name,
-            "actor": state.username,
-            "args": {k: str(v)[:300] for k, v in args.items()},
-        }
-    )
-    await done.wait()
-    info = _pending_approvals.pop(approval_id, {})
-    return bool(info.get("approved"))
-
-
-async def _preflight(state: RunState) -> None:
-    import httpx  # noqa: PLC0415
-
-    try:
-        async with httpx.AsyncClient(timeout=1.5) as c:
-            await c.get("http://localhost:8181/health")
-    except Exception:
-        state.push(
-            {
-                "type": "warning",
-                "message": (
-                    "OPA is not reachable — all tool calls will be denied (fail-closed).\n"
-                    "Start it with:  opa run --server --addr :8181 policies/"
-                ),
-            }
-        )
-
-    if not settings.database_url:
-        state.push(
-            {
-                "type": "warning",
-                "message": (
-                    "DATABASE_URL is not set — document search and conversation memory "
-                    "are disabled."
-                ),
-            }
-        )
-
-    if not settings.logfire_token:
-        state.push(
-            {
-                "type": "warning",
-                "message": (
-                    "LOGFIRE_TOKEN is not set — traces will not be sent to Logfire.\n"
-                    "Get a token at https://logfire.pydantic.dev and add it to .env."
-                ),
-            }
-        )
-
-
-async def _run_agent_bg(run_id: str, state: RunState, question: str | None = None) -> None:
-    from tack_ai.agent import (  # noqa: PLC0415
-        _CACHE_SETTINGS,
-        _USAGE_LIMITS,
-        _build_model_with_fallback,
-        _estimate_cost,
-        _get_memory,
-        agent,
-    )
-    from tack_ai.audit import current_run_id  # noqa: PLC0415
-    from tack_ai.core.router import LLMRouter, RuleBasedRouter  # noqa: PLC0415
-
-    q = question or state.current_question
-    turn_idx = state.start_turn(q)
-    current_run_id.set(run_id)
-    _approval_override.set(lambda tool, args: _web_request_approval(tool, args, run_id, state))
-
-    # Only run preflight on the first turn
-    if turn_idx == 0:
-        await _preflight(state)
-
-    try:
-        model_config = _effective_model_config()
-        state.push({"type": "status", "message": "Routing…"})
-        if _effective_router_type() == "llm" and settings.openai_api_key:
-            try:
-                route = await LLMRouter(
-                    model_str=model_config["router"]["decision"],
-                    openai_api_key=settings.get_key("openai"),
-                ).route(q)
-            except Exception as e:
-                state.push(
-                    {
-                        "type": "warning",
-                        "message": f"LLM router unavailable ({e.__class__.__name__}), falling back to rule-based.",
-                    }
-                )
-                route = RuleBasedRouter().route(q)
-        else:
-            route = RuleBasedRouter().route(q)
-
-        state.tier = route.tier.value
-        state.push(
-            {
-                "type": "routing",
-                "tier": route.tier.value,
-                "effort": route.reasoning_effort.value,
-                "reason": route.reason,
-            }
-        )
-        model, model_str = _build_model_with_fallback(route, model_config)
-        provider = model_str.split(":")[0]
-
-        await append(
-            AuditRecord(
-                run_id=run_id,
-                actor=state.username,
-                event_type="routing",
-                routing_tier=route.tier.value,
-                routing_reason=route.reason,
-                model=model_str,
-                provider=provider,
-            )
-        )
-
-        memory = _get_memory()
-        session_id = state.username  # one memory session per user across all their threads
-        memory_context = ""
-        if memory:
-            try:
-                memory_context = await memory.get_context(session_id)
-            except Exception as e:
-                state.push(
-                    {
-                        "type": "warning",
-                        "message": f"Memory read failed ({e.__class__.__name__}) — running without prior context.",
-                    }
-                )
-
-        full_question = f"{memory_context}\n\nUser: {q}" if memory_context else q
-
-        state.push({"type": "status", "message": f"Running on {model_str}…"})
-
-        from pydantic_ai.exceptions import UsageLimitExceeded  # noqa: PLC0415
-
-        _agent_run = None
-        try:
-            async with agent.iter(
-                full_question,
-                model=model,
-                model_settings=_CACHE_SETTINGS if provider == "anthropic" else None,
-                usage_limits=_USAGE_LIMITS,
-            ) as _agent_run:
-                async for _ in _agent_run:
-                    pass  # drive the agent; tool calls execute as side effects
-        except UsageLimitExceeded:
-            # Emit whatever trace we captured before hitting the ceiling
-            partial_msgs = _agent_run.all_messages() if _agent_run else []
-            for ev in _extract_trace(partial_msgs):
-                state.push(ev)
-            state.push(
-                {
-                    "type": "error",
-                    "message": (
-                        f"Tool call limit reached ({_USAGE_LIMITS.tool_calls_limit} calls). "
-                        "The model kept calling tools without reaching an answer — "
-                        "see the trace above for the loop pattern. "
-                        "Check that OPA is running and the tools are returning useful data."
-                    ),
-                }
-            )
-            state.status = "failed"
-            state.push({"type": "done"})
-            return
-
-        assert _agent_run is not None
-        run_result = _agent_run.result
-        assert run_result is not None
-        run_usage = run_result.usage
-        cost = _estimate_cost(run_usage, model_str)
-        state.cost_usd = cost
-        state.total_cost_usd += cost
-        out = run_result.output.model_dump()
-
-        await append(
-            AuditRecord(
-                run_id=run_id,
-                actor=state.username,
-                event_type="outcome",
-                model=model_str,
-                provider=provider,
-                outcome=out["summary"][:200],
-                cost_usd=cost,
-            )
-        )
-
-        if memory:
-            try:
-                await memory.add_turn(session_id, "user", q)
-                await memory.add_turn(session_id, "assistant", out["summary"])
-            except Exception as e:
-                state.push(
-                    {
-                        "type": "warning",
-                        "message": f"Memory write failed ({e.__class__.__name__}) — turn not saved.",
-                    }
-                )
-
-        # Push reasoning trace (tool calls, results, thinking) before the answer
-        for trace_event in _extract_trace(run_result.all_messages()):
-            state.push(trace_event)
-
-        state.push(
-            {
-                "type": "answer",
-                "summary": out["summary"],
-                "sources": out.get("sources", []),
-                "confidence": out.get("confidence", 0),
-                "cost_usd": cost,
-                "input_tokens": run_usage.input_tokens,
-                "output_tokens": run_usage.output_tokens,
-                "turn_index": turn_idx,
-            }
-        )
-        state.end_turn(out["summary"])
-        tasks_total.labels(status="completed").inc()
-        # Conversation stays open for follow-up
-        state.status = "waiting_follow_up"
-
-    except asyncio.CancelledError:
-        state.push({"type": "error", "message": "Task cancelled by user."})
-        state.status = "cancelled"
-        tasks_total.labels(status="cancelled").inc()
-        state.push({"type": "done"})
-    except Exception as exc:
-        msg = str(exc)
-        if "All connection attempts failed" in msg or "Client failed to connect" in msg:
-            from tack_ai.core.config import Settings as _S  # noqa: PLC0415
-
-            cfg = _S()
-            if cfg.mcp_gateway_url:
-                msg = (
-                    f"MCP gateway at {cfg.mcp_gateway_url!r} is not reachable.\n"
-                    "Start it with:  uv run python -m tack_ai.mcp_gateway\n"
-                    "Or unset MCP_GATEWAY_URL in .env to run without MCP tools."
-                )
-        state.push({"type": "error", "message": msg})
-        state.status = "failed"
-        tasks_total.labels(status="failed").inc()
-        state.push({"type": "done"})
 
 
 # ── Auth routes ────────────────────────────────────────────────────────────────
@@ -675,168 +372,21 @@ async def logout(request: Request) -> Response:
     return redir
 
 
-# ── Task routes ────────────────────────────────────────────────────────────────
+# ── Dashboard ──────────────────────────────────────────────────────────────────
 
 
 @app.get("/")
 async def index(request: Request, user: str = Depends(_auth)) -> Response:
     role = _get_role(request)
-    recent = list(reversed(list(_runs.values())))[:20]
-    cost_today = sum(r.total_cost_usd for r in _runs.values())
-    tier_counts: dict[str, int] = {}
-    for r in _runs.values():
-        if r.tier:
-            tier_counts[r.tier] = tier_counts.get(r.tier, 0) + 1
-
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             "user": user,
             "role": role,
-            "stats": {
-                "cost_today": cost_today,
-                "runs_today": len(_runs),
-                "pending": len(_pending_approvals),
-                "tier_counts": tier_counts,
-            },
-            "recent_runs": [
-                {
-                    "run_id": r.run_id,
-                    "question": r.question[:80],
-                    "tier": r.tier,
-                    "status": r.status,
-                    "cost_usd": r.total_cost_usd or None,
-                }
-                for r in recent
-            ],
+            "pending_approvals": len(_pending_approvals),
         },
     )
-
-
-@app.post("/tasks")
-async def submit_task(
-    request: Request,
-    question: str = Form(...),
-    user: str = Depends(_require_admin),
-) -> Response:
-    if not question.strip():
-        return RedirectResponse("/", status_code=303)
-
-    run_id = str(uuid.uuid4())
-    state = RunState(run_id=run_id, question=question.strip(), username=user)
-    _runs[run_id] = state
-    state.task = asyncio.create_task(_run_agent_bg(run_id, state))
-    return RedirectResponse(f"/tasks/{run_id}", status_code=303)
-
-
-@app.get("/tasks/{run_id}")
-async def task_detail(run_id: str, request: Request, user: str = Depends(_auth)) -> Response:
-    state = _runs.get(run_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Task not found")
-    role = _get_role(request)
-    completed_turns = [t for t in state.turns if t.get("answer") is not None]
-    return templates.TemplateResponse(
-        request,
-        "task.html",
-        {
-            "user": user,
-            "role": role,
-            "run_id": run_id,
-            "question": state.turns[0]["question"] if state.turns else state.current_question,
-            "status": state.status,
-            "completed_turns": completed_turns,
-            "total_cost_usd": state.total_cost_usd,
-        },
-    )
-
-
-@app.get("/tasks/{run_id}/stream")
-async def task_stream(
-    run_id: str,
-    request: Request,
-    last_id: int = 0,
-    user: str = Depends(_auth),
-) -> Response:
-    state = _runs.get(run_id)
-    if not state:
-        return Response("Not found", status_code=404)
-
-    async def generate():
-        idx = last_id
-        while True:
-            if idx < len(state.events):
-                event = state.events[idx]
-                yield f"id: {idx}\ndata: {json.dumps(event)}\n\n"
-                idx += 1
-            elif state.status in ("closed", "failed", "cancelled"):
-                # Drain remaining events then close
-                while idx < len(state.events):
-                    yield f"id: {idx}\ndata: {json.dumps(state.events[idx])}\n\n"
-                    idx += 1
-                break
-            else:
-                # running or waiting_follow_up — keep stream open
-                await asyncio.sleep(0.25)
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.post("/tasks/{run_id}/message")
-async def submit_follow_up(
-    run_id: str,
-    request: Request,
-    question: str = Form(...),
-    user: str = Depends(_require_admin),
-) -> Response:
-    state = _runs.get(run_id)
-    if not state or state.username != user:
-        raise HTTPException(status_code=404)
-    if state.status != "waiting_follow_up":
-        return RedirectResponse(f"/tasks/{run_id}", status_code=303)
-    q = question.strip()
-    if not q:
-        return RedirectResponse(f"/tasks/{run_id}", status_code=303)
-    state.status = "running"
-    state.task = asyncio.create_task(_run_agent_bg(run_id, state, q))
-    return RedirectResponse(f"/tasks/{run_id}", status_code=303)
-
-
-@app.post("/tasks/{run_id}/close")
-async def close_conversation(
-    run_id: str,
-    request: Request,
-    user: str = Depends(_require_admin),
-) -> Response:
-    state = _runs.get(run_id)
-    if state:
-        if state.task and not state.task.done():
-            state.task.cancel()
-        state.status = "closed"
-        state.push({"type": "done"})
-    return RedirectResponse(f"/tasks/{run_id}", status_code=303)
-
-
-@app.post("/tasks/{run_id}/cancel")
-async def cancel_task(
-    run_id: str,
-    request: Request,
-    user: str = Depends(_require_admin),
-) -> Response:
-    state = _runs.get(run_id)
-    if state:
-        if state.task and not state.task.done():
-            state.status = "cancelled"
-            state.task.cancel()
-        elif state.status == "waiting_follow_up":
-            state.status = "closed"
-            state.push({"type": "done"})
-    return RedirectResponse(f"/tasks/{run_id}", status_code=303)
 
 
 # ── Approval routes ────────────────────────────────────────────────────────────
@@ -869,11 +419,8 @@ async def approve_action(
 
     info["approved"] = True
     info["approver"] = user
-    run_state = _runs.get(info["run_id"])
-    if run_state and info["tool_name"] not in _HIGH_RISK_TOOLS:
-        run_state.approved_tools.add(info["tool_name"])
     fga = get_fga_client()
-    if fga is not None and info["tool_name"] not in _HIGH_RISK_TOOLS:
+    if fga is not None:
         await fga.grant_tool(info["run_id"], info["tool_name"])
     await append(
         AuditRecord(
@@ -956,49 +503,6 @@ async def audit_page(
     )
 
 
-# ── History route ──────────────────────────────────────────────────────────────
-
-
-@app.get("/history")
-async def history_page(request: Request, user: str = Depends(_auth)) -> Response:
-    import psycopg  # noqa: PLC0415
-    from psycopg.rows import dict_row  # noqa: PLC0415
-
-    role = _get_role(request)
-    sessions: dict[str, Any] = {}
-    if settings.database_url:
-        try:
-            async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
-                async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute(
-                        "SELECT session_id, role, content, turn_index, created_at "
-                        "FROM conversation_turns ORDER BY session_id, turn_index"
-                    )
-                    turns = await cur.fetchall()
-                    await cur.execute(
-                        "SELECT session_id, summary, up_to_turn, updated_at "
-                        "FROM conversation_summaries"
-                    )
-                    summaries = {r["session_id"]: dict(r) for r in await cur.fetchall()}
-            for t in turns:
-                sid = t["session_id"]
-                if sid not in sessions:
-                    sessions[sid] = {"turns": [], "summary": summaries.get(sid)}
-                sessions[sid]["turns"].append(dict(t))
-        except Exception:
-            pass
-
-    return templates.TemplateResponse(
-        request,
-        "history.html",
-        {
-            "user": user,
-            "role": role,
-            "sessions": sessions,
-        },
-    )
-
-
 # ── Admin: user management ─────────────────────────────────────────────────────
 
 
@@ -1062,9 +566,18 @@ async def admin_delete_user(
 @app.get("/admin/settings")
 async def admin_settings(request: Request, user: str = Depends(_require_admin)) -> Response:
     from tack_ai.core.router import load_model_config  # noqa: PLC0415
+    from tack_ai.policy.engine import get_policy_version  # noqa: PLC0415
+    from tack_ai.web.oidc import OIDC_ADMIN_EMAILS as _oidc_admin_emails  # noqa: PLC0415
+    from tack_ai.web.oidc import OIDC_CLIENT_ID as _oidc_client_id  # noqa: PLC0415
+    from tack_ai.web.oidc import OIDC_DEFAULT_ROLE as _oidc_default_role  # noqa: PLC0415
+    from tack_ai.web.oidc import OIDC_DISCOVERY_URL as _oidc_discovery_url  # noqa: PLC0415
+    from tack_ai.web.oidc import OIDC_ENABLED as _oidc_enabled  # noqa: PLC0415
+    from tack_ai.web.oidc import OIDC_PROVIDER as _oidc_provider  # noqa: PLC0415
+    from tack_ai.web.oidc import OIDC_REDIRECT_BASE as _oidc_redirect_base  # noqa: PLC0415
 
     base_config = load_model_config()
     effective = _effective_model_config()
+    policy_version = await get_policy_version()
     return templates.TemplateResponse(
         request,
         "admin_settings.html",
@@ -1077,6 +590,16 @@ async def admin_settings(request: Request, user: str = Depends(_require_admin)) 
             "base_tiers": base_config.get("tiers", {}),
             "overrides": _runtime.get("model_overrides", {}),
             "router_decision": effective.get("router", {}).get("decision", ""),
+            "policy_engine": settings.policy_engine,
+            "opa_url": settings.opa_url,
+            "policy_version": policy_version,
+            "oidc_enabled": _oidc_enabled,
+            "oidc_provider": _oidc_provider,
+            "oidc_redirect_base": _oidc_redirect_base,
+            "oidc_client_id_set": bool(_oidc_client_id),
+            "oidc_discovery_url": _oidc_discovery_url,
+            "oidc_admin_emails": sorted(_oidc_admin_emails),
+            "oidc_default_role": _oidc_default_role,
             "success": request.query_params.get("success"),
             "error": request.query_params.get("error"),
         },
@@ -1126,6 +649,16 @@ async def admin_settings_reset(
     _runtime.clear()
     if _RUNTIME_SETTINGS_PATH.exists():
         _RUNTIME_SETTINGS_PATH.unlink()
+    return RedirectResponse("/admin/settings?success=1", status_code=303)
+
+
+@app.post("/admin/policy/reload")
+async def admin_policy_reload(
+    request: Request,
+    user: str = Depends(_require_admin),
+) -> Response:
+    """Invalidate the cached policy version so the next request re-fetches from OPA."""
+    reload_policy_version()
     return RedirectResponse("/admin/settings?success=1", status_code=303)
 
 
@@ -1451,6 +984,35 @@ async def redoc_ui(user: str = Depends(_auth)) -> Response:
 </body>
 </html>"""
     return HTMLResponse(html)
+
+
+# ── PydanticAI chat UI ────────────────────────────────────────────────────────
+# Mounted at "/" as a catch-all AFTER all FastAPI routes are registered so
+# FastAPI routes take precedence (they're checked first in the route list).
+# The JS bundle fetched from CDN uses absolute paths /api/chat and /api/configure
+# which resolve against the FastAPI root — the middleware above gates those.
+# Auth-gated: sessions required before /api/chat, /api/configure, and /chat/*.
+
+try:
+    from tack_ai.agent import agent as _tack_agent  # noqa: PLC0415
+    from tack_ai.core.router import build_model, load_model_config  # noqa: PLC0415
+
+    _mc = load_model_config()
+    # to_web(models=...) calls pydantic_ai.infer_model() on each entry which reads
+    # os.environ directly, bypassing our Settings object loaded from .env.
+    # Pass already-constructed Model instances via build_model() so API keys come
+    # from Settings. Deduplicate by string to avoid showing the same model twice.
+    _seen_model_strs: set[str] = set()
+    _tier_models_built: dict[str, object] = {}
+    for _tier, _label in [("simple", "Simple"), ("general", "General"), ("deep_reasoning", "Deep reasoning")]:
+        _model_str = _mc["tiers"][_tier]
+        _provider = _model_str.split(":")[0]
+        if getattr(settings, f"{_provider}_api_key", None) and _model_str not in _seen_model_strs:
+            _tier_models_built[f"{_label}  ({_model_str})"] = build_model(_model_str, settings)
+            _seen_model_strs.add(_model_str)
+    app.mount("/", _tack_agent.to_web(models=_tier_models_built or None))
+except Exception as _e:
+    log.warning("Could not mount chat UI — check API key config", error=str(_e))
 
 
 # ── Entry point (P1: Ctrl+C fix) ──────────────────────────────────────────────

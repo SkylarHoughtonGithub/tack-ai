@@ -14,28 +14,23 @@ narrower in scope.
 
 ## Decision
 
-Use **Pydantic AI** as the primary framework. LangGraph appears only in Phase 11
-as a standalone comparison module that answers a specific tradeoff question
-(explicit state machines vs. implicit agent loops).
+Use **Pydantic AI** as the primary framework throughout, including `pydantic_graph`
+for the coding workflow. A `langgraph_approval.py` stub is retained for reference
+but is not in the main execution path.
 
 ## Rationale
 
-- **Depth over breadth:** Pydantic AI exposes the mechanics of the agent loop
-  (message history, tool dispatch, streaming) without hiding them behind
-  high-level abstractions. Learning at this level produces transferable knowledge;
-  knowing LangChain's DSL does not.
 - **Type safety:** Tools are typed Python functions; the structured output is a
   Pydantic model. Mypy can check the entire path from tool args to agent result.
-- **Resume value:** A demonstrable ability to build agents from the underlying
-  primitives is more differentiated on a CV than "used LangChain".
-- **Prompt caching:** Pydantic AI exposes `AnthropicModelSettings` so the system
-  prompt (long, repeated on every call) hits the cache transparently.
+- **Integrated ecosystem:** `pydantic_graph`, `pydantic-evals`, and the Capabilities
+  framework are first-class parts of the same library — no impedance mismatch.
+- **Multi-provider:** Native support for Anthropic and OpenAI with identical tool
+  interfaces; provider-specific settings applied at routing time.
+- **Prompt caching:** Built-in cache tracking across providers via `result.usage`.
 
 ## Consequences
 
-- LangGraph's explicit graph structure (useful for branching multi-agent flows)
-  is not available in the main path. The Phase 11 module shows how it would look.
-- Pydantic AI is younger than LangChain; some features (e.g. batch API
-  integration) required manual wiring.
+- `pydantic_graph` handles graph-structured workflows (Plan → Edit → Test → Evaluate)
+  without a separate LangGraph dependency.
 - Any Pydantic AI upgrade is an explicit dependency bump, not a transitive
   framework pull.

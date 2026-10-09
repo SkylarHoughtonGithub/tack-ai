@@ -11,36 +11,34 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    typesafe_api_key: str | None = None
     logfire_token: str | None = None
     router_type: str = "llm"  # "llm" (default) or "rule_based" (fallback, no OpenAI key needed)
     task_budget_usd: float = 0.10
 
-    # Phase 6 — RAG and memory
     database_url: str | None = None  # e.g. postgresql://tack_ai:tack_ai@localhost/tack_ai
     openfga_url: str = "http://localhost:8081"
     openfga_store_id: str | None = None
     openfga_model_id: str | None = None
 
-    # Phase 7 — MCP
     mcp_gateway_url: str | None = None  # e.g. http://localhost:8082/sse
     mcp_filesystem_root: str | None = (
         None  # root for filesystem MCP server (defaults to project root)
     )
 
-    # Phase 9 — durable execution
     temporal_host: str = "localhost:7233"  # Temporal gRPC endpoint
 
-    # Phase 10 — web console
     web_username: str = "admin"
     web_password: str = "changeme"
 
     # Optional: set BRAVE_API_KEY to enable real web search
     brave_api_key: str | None = None
 
-    # Phase 11 — policy engine selection
     # "opa"   — all decisions through OPA (default)
     # "cedar" — tool-authorization through Cedar; routing/budget still through OPA
     policy_engine: str = "opa"
+    opa_url: str = "http://localhost:8181"
+    cedar_policy_path: str = "cedar/"
 
     # P2 — OIDC / SSO (optional; username/password works without these)
     oidc_client_id: str | None = None

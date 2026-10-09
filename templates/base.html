@@ -78,21 +78,16 @@
       </a>
 
       {% if user %}
-      <!-- tasks + approvals sub -->
-      <div class="dd flex items-center" id="dd-tasks">
-        <a href="/" class="text-sm text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">tasks</a>
-        <button onclick="toggleDD('dd-tasks')" class="text-[var(--tx-4)] hover:text-[var(--brand)] text-xs ml-0.5 px-0.5 leading-none transition-colors">▾</button>
+      <!-- chat (plain link) -->
+      <a href="/chat" class="text-sm text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">chat</a>
+
+      <!-- compliance dropdown -->
+      <div class="dd flex items-center" id="dd-compliance">
+        <a href="/approvals" class="text-sm text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">compliance</a>
+        <button onclick="toggleDD('dd-compliance')" class="text-[var(--tx-4)] hover:text-[var(--brand)] text-xs ml-0.5 px-0.5 leading-none transition-colors">▾</button>
         <div class="dd-menu">
           <a href="/approvals" class="dd-item">approvals</a>
-        </div>
-      </div>
-
-      <!-- history + audit sub -->
-      <div class="dd flex items-center" id="dd-history">
-        <a href="/history" class="text-sm text-[var(--tx-4)] hover:text-[var(--brand)] transition-colors">history</a>
-        <button onclick="toggleDD('dd-history')" class="text-[var(--tx-4)] hover:text-[var(--brand)] text-xs ml-0.5 px-0.5 leading-none transition-colors">▾</button>
-        <div class="dd-menu">
-          <a href="/audit" class="dd-item">audit</a>
+          <a href="/audit"     class="dd-item">audit</a>
         </div>
       </div>
 
@@ -108,6 +103,7 @@
           <a href="/admin/settings" class="dd-item">settings</a>
           <div class="dd-sep"></div>
           <a href="/docs"           class="dd-item">api docs</a>
+          <a href="/metrics"        class="dd-item">metrics</a>
         </div>
       </div>
       {% endif %}
@@ -142,6 +138,13 @@
     </div>
     {% endif %}
   </nav>
+
+  {% if not request.state.db_ok %}
+  <div class="bg-yellow-900/40 border-b border-yellow-700/60 text-yellow-300 text-xs font-mono px-6 py-2 flex items-center gap-2">
+    <span>&#9888;</span>
+    <span>Database unavailable — persistent features (audit trail, user management, code index) are disabled. Run <code class="bg-yellow-900/60 px-1 rounded">task migrate</code> if the schema is missing.</span>
+  </div>
+  {% endif %}
 
   <main class="max-w-5xl mx-auto px-4 py-8">
     {% block content %}{% endblock %}

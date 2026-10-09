@@ -1,5 +1,5 @@
 """
-Phase 9 — Durable execution via Pydantic AI's DBOS integration.
+Durable execution via Pydantic AI's DBOS integration.
 
 Concepts demonstrated
 ─────────────────────
@@ -84,8 +84,7 @@ def _init_dbos() -> None:
     _dbos_instance = DBOS(config=config)
     DBOS.launch()
 
-    # DBOSAgent (deprecated wrapper) is the simplest path for Phase 9 — it
-    # re-wraps every @tool_plain from the base agent so all tools keep working.
+    # DBOSAgent (deprecated wrapper) re-wraps every @tool_plain from the base agent.
     # Future migration: replace with Agent(..., capabilities=[DBOSDurability()]).
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)

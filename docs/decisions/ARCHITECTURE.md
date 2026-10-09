@@ -91,7 +91,7 @@ decisions. The decision log lives in `docs/decisions/`.
 | Store | What lives there |
 |-------|-----------------|
 | **Postgres** (pgvector) | Audit log, conversation turns, document chunks (embeddings), user accounts |
-| **Postgres** (temporal schema) | Temporal workflow history (Phase 9 comparison module) |
+| **Postgres** (temporal schema) | Temporal workflow history (comparison module) |
 | **OPA in-process** | Policy bundle, loaded from `policies/*.rego` at startup |
 | **In-memory** | Active run states, pending approvals, session tokens |
 | **config/runtime_settings.json** | Admin-overridden routing config (persisted across restarts) |
@@ -105,10 +105,10 @@ src/tack_ai/
 ├── agent.py                  Main Pydantic AI agent + tool definitions
 ├── observability.py          structlog setup, Prometheus counters
 ├── async_demo.py             Demo script
-├── durable.py                DBOS/Temporal durable-execution patterns (Phase 9)
-├── mcp_gateway.py            MCP HTTP SSE gateway (Phase 7)
+├── durable.py                DBOS durable-execution integration
+├── mcp_gateway.py            MCP HTTP SSE gateway
 ├── mcp_server.py             MCP server stub
-├── temporal_compare.py       Temporal workflow comparison (Phase 9)
+├── temporal_compare.py       Temporal workflow comparison module
 │
 ├── core/                     Foundational types — no internal deps
 │   ├── config.py             Pydantic Settings (env vars + .env)
@@ -117,7 +117,7 @@ src/tack_ai/
 │
 ├── policy/                   Policy enforcement
 │   ├── engine.py             enforce(), OPA + Cedar integration
-│   └── langgraph_approval.py LangGraph approval flow (Phase 11 comparison)
+│   └── langgraph_approval.py LangGraph approval flow (stub; main path uses pydantic_graph)
 │
 ├── audit/                    Append-only audit trail
 │   └── core.py               Hash-chained Postgres writes + verification

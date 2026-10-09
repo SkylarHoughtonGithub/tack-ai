@@ -17,8 +17,8 @@ Multiple policy engines exist: OPA (Rego), Cedar, inline Python `if` statements.
 
 ## Decision
 
-Use **OPA** for all policy categories. **Cedar** appears in Phase 11 as a
-comparison module covering tool-authorization only — not routing or budget.
+Use **OPA** for all policy categories. **Cedar** covers tool-authorization only —
+not routing or budget, which require OPA's broader expression model.
 
 ## Rationale
 
