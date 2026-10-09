@@ -35,6 +35,13 @@ permit (
     resource == Tool::"search_documents"
 );
 
+@id("allow_search_code_chunks")
+permit (
+    principal,
+    action == Action::"call",
+    resource == Tool::"search_code_chunks"
+);
+
 // ── Filesystem MCP read-only tools ────────────────────────────────────────
 
 @id("allow_list_directory")

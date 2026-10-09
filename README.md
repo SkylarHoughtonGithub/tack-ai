@@ -128,7 +128,8 @@ docker compose up
 uv run tack-ai-web              # web console (preferred over uvicorn --reload)
 uv run python -m tack_ai.agent  # CLI chat agent
 
-uv run pytest tests/ -v --ignore=tests/e2e  # unit tests (no external services needed)
+uv run pytest tests/ -v --ignore=tests/e2e --ignore=tests/evals  # unit tests (no external services needed)
+uv run pytest tests/evals/ -m eval -v      # LLM-as-judge evals (requires API key, costs money)
 uv run ruff check src/          # lint
 uv run mypy src/tack_ai/        # type-check
 uv run bandit -r src/tack_ai/ -ll  # security scan
@@ -200,8 +201,18 @@ OPA policies auto-reload on file change (`--watch`). With Docker Compose the OPA
 
 ## Evals
 
+`tests/evals/` holds `pydantic-evals` regression cases for the coding workflow. Each case sends a task to the planner agent and uses an LLM-as-judge to verify the plan is correct:
+
+| Case | Task type | Rubric |
+|------|-----------|--------|
+| `add_function` | Add a new function | Plan targets the right file and describes the correct signature |
+| `fix_bug` | Fix a KeyError | Plan targets the right file and describes error handling |
+| `refactor` | Extract a module | Plan identifies both source and destination files |
+| `explain_code` | Add a docstring | Plan targets the right file and describes the workflow |
+
 ```bash
-uv run python evals/run_redteam_evals.py   # injection/exfiltration scenarios (no LLM cost)
-uv run python evals/run_router_evals.py    # router accuracy on 40 golden cases
-uv run python evals/run_answer_evals.py    # LLM-as-judge answer quality (Haiku vs gpt-4o-mini)
+# Run evals (requires ANTHROPIC_API_KEY or OPENAI_API_KEY)
+uv run pytest tests/evals/ -m eval -v
 ```
+
+Evals run as a separate CI job — they are not part of the default test suite because they call real LLM APIs and cost money. Scores are printed via `report.print()` after each run; track them over time to catch quality regressions when models or prompts change.

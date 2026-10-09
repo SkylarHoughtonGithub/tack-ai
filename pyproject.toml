@@ -17,7 +17,6 @@ dependencies = [
     "psycopg[binary]>=3.3.6",
     "mcp>=1.0.0",
     "pydantic-ai[dbos]>=0.8.1",
-    "pydantic-evals>=2.52.0",
     "pydantic-settings>=2.11.0",
     "fastapi>=0.115.0",
     "jinja2>=3.1.0",
@@ -51,6 +50,7 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "playwright>=1.49.0",
     "pytest-playwright>=0.6.0",
+    "pydantic-evals>=2.52.0",
 ]
 
 [build-system]
@@ -72,6 +72,7 @@ check_untyped_defs = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["eval: LLM-as-judge evals (require API keys, cost money — run with: pytest -m eval)"]
 
 [tool.bandit]
 skips = ["B101"]  # allow assert in tests
