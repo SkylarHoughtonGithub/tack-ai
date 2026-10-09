@@ -14,7 +14,7 @@ A policy-governed coding agent with a tamper-evident audit trail. Designed for c
 
 - **Coding workflow** — autonomous Plan → Edit → Test → Gate loop powered by `pydantic_graph`; four sub-agents collaborate to decompose, implement, and verify tasks with parallel file edits and a structured review gate
 - **Routes tasks** to the right model tier (simple / general / deep reasoning) via a configurable LLM or rule-based router; Anthropic and OpenAI are equal first-class providers
-- **Enforces policy** with OPA — every tool call gets an `allow`, `deny`, or `require_approval` decision before execution; fail-closed by default
+- **Enforces policy** with Cedar (default) or OPA — every tool call gets an `allow`, `deny`, or `require_approval` decision before execution; fail-closed by default; swap engines via `POLICY_ENGINE`
 - **Audits everything** in a hash-chained, append-only Postgres table with secret redaction
 - **Manages memory** through rolling conversation summarization and pgvector-backed semantic search over code and documents
 - **Web console** for task queue, human approval, audit export, routing settings, and user management (local accounts + OIDC/SSO)
@@ -32,9 +32,10 @@ A policy-governed coding agent with a tamper-evident audit trail. Designed for c
 └─────────────────────────────────────────────────────────────────────┘
          │ tool calls
          ▼
-┌──────────────┐   allow/deny/require_approval   ┌──────────────────┐
-│   OPA Policy │◀───────────────────────────────▶│  Tool Execution  │
-└──────────────┘                                 └──────────────────┘
+┌──────────────────┐   allow/deny/require_approval   ┌──────────────────┐
+│  Cedar / OPA     │◀───────────────────────────────▶│  Tool Execution  │
+│  Policy Engine   │                                 └──────────────────┘
+└──────────────────┘
          │                                                │
          ▼                                                ▼
 ┌──────────────────────┐                    ┌────────────────────────┐
@@ -50,7 +51,7 @@ A policy-governed coding agent with a tamper-evident audit trail. Designed for c
 | Coding workflow | `pydantic_graph` | Plan → Edit → Test → Gate with up to 3 retry iterations |
 | Gate decision | TypeSafe Jev / LLM fallback | Structured fix / escalate / pass decision |
 | Chat agent | Pydantic AI | 8 tools, prompt caching, cost tracking |
-| Policy engine | OPA (primary), Cedar (tool-auth subset) | Tool authorization, routing, budget |
+| Policy engine | Cedar (default), OPA | Cedar: tool authorization; OPA: routing + budget |
 | Approval flow | DB queue + web UI | Human-in-the-loop for gray-area decisions |
 | Access control | OpenFGA | Fine-grained per-resource permissions |
 | Memory | Postgres + pgvector | Conversation history + semantic code/doc search |
@@ -116,6 +117,8 @@ docker compose up
 | `OIDC_PROVIDER` | No | `google`, `github`, or `oidc` for SSO login |
 | `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | If OIDC | OAuth application credentials |
 | `OIDC_ADMIN_EMAILS` | No | Comma-separated emails granted admin role via OIDC |
+| `POLICY_ENGINE` | No | `cedar` (default) or `opa` — Cedar handles tool-auth; routing/budget always via OPA |
+| `OPA_URL` | No | OPA server URL (default `http://localhost:8181`) |
 | `LOGFIRE_TOKEN` | No | Pydantic Logfire token for AI observability |
 | `LOG_JSON` | No | `true` for JSON logs (default), `false` for human-readable |
 
@@ -149,7 +152,7 @@ The `pydantic_graph` workflow (`src/tack_ai/graph/`) runs four sub-agents in seq
 | `TestNode` | `test_agent` | Runs the project test suite and produces a structured result |
 | `GateNode` | `review_agent` + Jev | Decides `pass`, `fix` (retry up to 3×), or `escalate` to a human |
 
-Every tool call in every sub-agent is gated by OPA. The gate uses [TypeSafe Jev](https://jev-agent.com) for a deterministic structured decision when `TYPESAFE_API_KEY` is set, with an LLM fallback for tool calls Jev cannot fill.
+Every tool call in every sub-agent is gated by the configured policy engine (Cedar by default). The gate uses [TypeSafe Jev](https://jev-agent.com) for a deterministic structured decision when `TYPESAFE_API_KEY` is set, with an LLM fallback for tool calls Jev cannot fill.
 
 ```python
 from tack_ai.graph.workflow import run_coding_task
@@ -164,7 +167,7 @@ result = await run_coding_task(
 
 ## Agent tools
 
-The chat agent has 8 tools, each gated by OPA policy before execution:
+The chat agent has 8 tools, each gated by the policy engine before execution:
 
 | Tool | Risk | Approval required |
 |------|------|-------------------|
@@ -183,13 +186,17 @@ See [`docs/AGENTS.md`](docs/AGENTS.md) for the full policy reference.
 
 ## Policies
 
-OPA policies live in `policies/`. They govern three things:
+Policy files live in `policies/`:
 
-1. **Tool authorization** — which tools a role may call
-2. **Routing** — which model tier a task is assigned to
-3. **Budget enforcement** — per-session cost caps
+| File | Engine | Governs |
+|------|--------|---------|
+| `tool_policy.cedar` | Cedar | Tool authorization (default engine) |
+| `tools.rego` | OPA | Tool authorization (when `POLICY_ENGINE=opa`) |
+| `tools.rego` | OPA | Routing decisions + budget enforcement (always) |
 
-Policies auto-reload on file change (`--watch`). With Docker Compose the OPA container starts automatically; locally: `task opa`.
+Cedar is deny-by-default — any tool without a permit rule is blocked structurally. OPA handles routing and budget rules that Cedar cannot express.
+
+OPA policies auto-reload on file change (`--watch`). With Docker Compose the OPA container starts automatically; locally: `task opa`.
 
 ## Evals
 
