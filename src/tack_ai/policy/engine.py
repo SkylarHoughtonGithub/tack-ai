@@ -76,7 +76,7 @@ async def policy_check(
         decision = cedar_decide(tool_name, args, {"prior_tool": prior or ""})
         if run_id:
             _prior_tool[run_id] = tool_name
-        return decision
+        return decision, "cedar"
 
     payload = {
         "input": {

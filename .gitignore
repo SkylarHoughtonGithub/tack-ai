@@ -12,3 +12,4 @@ docs/*.docx
 !docs/sample/
 !docs/AGENTS.md
 logs/
+drafts/

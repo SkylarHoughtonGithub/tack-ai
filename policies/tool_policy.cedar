@@ -132,6 +132,13 @@ permit (
 
 // ── Code execution ─────────────────────────────────────────────────────────
 
+@id("allow_run_tests")
+permit (
+    principal,
+    action == Action::"call",
+    resource == Tool::"run_tests"
+);
+
 @id("require_approval_run_code")
 permit (
     principal,
