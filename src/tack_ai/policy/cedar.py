@@ -1,12 +1,9 @@
 """
-Cedar tool-authorization module (Phase 11).
+Cedar tool-authorization module.
 
-Wraps cedarpy to provide the same PolicyDecision interface as OPA (policy.py)
+Wraps cedarpy to provide the same PolicyDecision interface as OPA (engine.py)
 for the tool-authorization subset of rules. Routing and budget checks are
 NOT handled here — Cedar is an authorization language only.
-
-Usage:
-    from cedar.cedar_policy import cedar_decide, run_tests, prove_delete_file_denied
 """
 from __future__ import annotations
 
@@ -16,9 +13,9 @@ from typing import Any
 
 import cedarpy
 
-from tack_ai.models import PolicyDecision
+from tack_ai.core.models import PolicyDecision
 
-_POLICY_FILE = Path(__file__).parent / "tool_policy.cedar"
+_POLICY_FILE = Path(__file__).parents[3] / "policies" / "tool_policy.cedar"
 _POLICY_TEXT: str | None = None
 _POLICY_SET: cedarpy.PolicySet | None = None
 
