@@ -1,6 +1,6 @@
 from pydantic_evals import Case, Dataset
 
-from tack_ai.router import RouteTier
+from tack_ai.core.router import RouteTier
 
 ROUTER_DATASET: Dataset[str, RouteTier, None] = Dataset(
     name="router",

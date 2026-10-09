@@ -20,8 +20,8 @@ from pydantic_evals import Dataset
 from pydantic_evals.evaluators import EqualsExpected
 
 from router_dataset import ROUTER_DATASET
-from tack_ai.config import Settings
-from tack_ai.router import LLMRouter, RuleBasedRouter, RouteTier
+from tack_ai.core.config import Settings
+from tack_ai.core.router import LLMRouter, RuleBasedRouter, RouteTier
 
 # Minimum acceptable accuracy for LLMRouter — a regression below this exits 1.
 LLM_ROUTER_MIN_ACCURACY = 0.60

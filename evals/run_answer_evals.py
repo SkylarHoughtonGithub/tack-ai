@@ -25,7 +25,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import LLMJudge
 
-from tack_ai.config import Settings
+from tack_ai.core.config import Settings
 
 settings = Settings()
 
