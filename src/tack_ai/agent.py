@@ -236,6 +236,13 @@ async def read_file(filename: str) -> str:
         return "Error: access outside the project folder is not allowed."
     if not target.exists():
         return f"Error: file '{filename}' not found."
+    if settings.database_url:
+        from tack_ai.memory.code_index import get_file_chunks  # noqa: PLC0415
+
+        chunks = await get_file_chunks(str(target), settings.database_url)
+        if chunks:
+            body = "\n---\n".join(chunks)
+            return _wrap_untrusted(body, f"file:{filename} (indexed, {len(chunks)} chunks)")
     return _wrap_untrusted(target.read_text(), f"file:{filename}")
 
 

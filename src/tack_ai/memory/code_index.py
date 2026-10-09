@@ -62,6 +62,18 @@ async def embed_file(
         await conn.commit()
 
 
+async def get_file_chunks(file_path: str, db_url: str) -> list[str]:
+    """Return ordered text chunks for a specific file, or [] if not indexed."""
+    async with await psycopg.AsyncConnection.connect(db_url) as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT content FROM code_chunks WHERE file_path = %s ORDER BY chunk_index",
+                (file_path,),
+            )
+            rows = await cur.fetchall()
+    return [row[0] for row in rows]
+
+
 async def search_code(
     query: str,
     db_url: str,

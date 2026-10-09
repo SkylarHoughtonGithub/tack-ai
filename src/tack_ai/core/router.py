@@ -68,7 +68,11 @@ def make_run_settings(model_str: str) -> Any | None:
             anthropic_cache_instructions=True,
             anthropic_cache_tool_definitions=True,
         )
-    # OpenAI handles prompt caching automatically — no settings required.
+    if provider == "openai":
+        from pydantic_ai.models.openai import OpenAIChatModelSettings
+
+        # 24h extended retention; parallel tool calls are on by default in the OpenAI API.
+        return OpenAIChatModelSettings(openai_prompt_cache_retention="24h")
     return None
 
 
