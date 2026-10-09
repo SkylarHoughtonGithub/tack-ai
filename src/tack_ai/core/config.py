@@ -34,11 +34,10 @@ class Settings(BaseSettings):
     # Optional: set BRAVE_API_KEY to enable real web search
     brave_api_key: str | None = None
 
-    # "opa"   — all decisions through OPA (default)
-    # "cedar" — tool-authorization through Cedar; routing/budget still through OPA
-    policy_engine: str = "opa"
+    # "cedar" — tool-authorization through Cedar; routing/budget still through OPA (default)
+    # "opa"   — all decisions through OPA
+    policy_engine: str = "cedar"
     opa_url: str = "http://localhost:8181"
-    cedar_policy_path: str = "cedar/"
 
     # P2 — OIDC / SSO (optional; username/password works without these)
     oidc_client_id: str | None = None

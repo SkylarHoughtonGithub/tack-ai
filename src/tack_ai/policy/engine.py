@@ -71,7 +71,7 @@ async def policy_check(
     prior = _prior_tool.get(run_id) if run_id else None
 
     if settings.policy_engine == "cedar" and tool_name != "__route__":
-        from cedar.cedar_policy import cedar_decide
+        from tack_ai.policy.cedar import cedar_decide
 
         decision = cedar_decide(tool_name, args, {"prior_tool": prior or ""})
         if run_id:
