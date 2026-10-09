@@ -55,6 +55,14 @@ def build_model(model_str: str, settings: "Settings") -> Any:
             model_name,
             provider=OpenAIProvider(api_key=settings.get_key("openai")),
         )
+    if provider == "typesafe":
+        from pydantic_ai.models.typesafe import TypeSafeModel
+        from pydantic_ai.providers.typesafe import TypeSafeProvider
+
+        return TypeSafeModel(
+            model_name,
+            provider=TypeSafeProvider(api_key=settings.get_key("typesafe")),
+        )
     raise ValueError(f"Unknown provider '{provider}' in model string '{model_str}'")
 
 
@@ -73,6 +81,7 @@ def make_run_settings(model_str: str) -> Any | None:
 
         # 24h extended retention; parallel tool calls are on by default in the OpenAI API.
         return OpenAIChatModelSettings(openai_prompt_cache_retention="24h")
+    # typesafe: no special settings needed — Jev has no caching knobs exposed here.
     return None
 
 

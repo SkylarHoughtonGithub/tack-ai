@@ -1,5 +1,7 @@
 version: '3'
 
+dotenv: ['.env']
+
 tasks:
   dev:
     desc: Start Compose infra then the web console (Ctrl+C stops the web server)
@@ -20,7 +22,7 @@ tasks:
   opa:
     desc: Start the OPA policy server on :8181
     cmds:
-      - opa run --server --addr :8181 policies/
+      - opa run --server --addr :8181 --watch policies/
 
   web:
     desc: Start the web console on :8000
@@ -62,6 +64,6 @@ tasks:
       - uv sync --all-groups
 
   migrate:
-    desc: Apply DB migrations (requires postgres running)
+    desc: Apply DB migrations in order (requires postgres running)
     cmds:
-      - psql "$DATABASE_URL" -f migrations/001_init.sql
+      - for f in migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done

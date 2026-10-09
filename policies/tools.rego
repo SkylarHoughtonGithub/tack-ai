@@ -11,10 +11,19 @@ default rule := "default_deny"
 # ── Read-only tools ──────────────────────────────────────────────────────────
 
 decision := "allow" if {
-    input.tool_name in {"web_search", "read_file", "search_documents"}
+    input.tool_name in {"web_search", "read_file", "search_documents", "search_code_chunks"}
 }
 rule := "read_only" if {
-    input.tool_name in {"web_search", "read_file", "search_documents"}
+    input.tool_name in {"web_search", "read_file", "search_documents", "search_code_chunks"}
+}
+
+# ── Test runner ───────────────────────────────────────────────────────────────
+
+decision := "allow" if {
+    input.tool_name == "run_tests"
+}
+rule := "run_tests_allow" if {
+    input.tool_name == "run_tests"
 }
 
 # ── File writes ──────────────────────────────────────────────────────────────

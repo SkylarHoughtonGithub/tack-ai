@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    typesafe_api_key: str | None = None
     logfire_token: str | None = None
     router_type: str = "llm"  # "llm" (default) or "rule_based" (fallback, no OpenAI key needed)
     task_budget_usd: float = 0.10

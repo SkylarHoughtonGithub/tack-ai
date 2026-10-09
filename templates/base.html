@@ -139,6 +139,13 @@
     {% endif %}
   </nav>
 
+  {% if not request.state.db_ok %}
+  <div class="bg-yellow-900/40 border-b border-yellow-700/60 text-yellow-300 text-xs font-mono px-6 py-2 flex items-center gap-2">
+    <span>&#9888;</span>
+    <span>Database unavailable — persistent features (audit trail, user management, code index) are disabled. Run <code class="bg-yellow-900/60 px-1 rounded">task migrate</code> if the schema is missing.</span>
+  </div>
+  {% endif %}
+
   <main class="max-w-5xl mx-auto px-4 py-8">
     {% block content %}{% endblock %}
   </main>

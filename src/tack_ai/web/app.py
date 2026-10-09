@@ -84,6 +84,37 @@ app = FastAPI(title="Tack-AI Console", docs_url=None, redoc_url=None, lifespan=l
 app.mount("/static/img", StaticFiles(directory=str(TEMPLATES_DIR / "img")), name="static_img")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+
+_db_status_cache: dict[str, Any] = {"ok": True, "checked_at": None}
+_DB_CACHE_TTL = 30  # seconds
+
+
+async def _check_db() -> bool:
+    import time  # noqa: PLC0415
+
+    now = time.monotonic()
+    if _db_status_cache["checked_at"] is not None and now - _db_status_cache["checked_at"] < _DB_CACHE_TTL:
+        return _db_status_cache["ok"]
+    if not settings.database_url:
+        _db_status_cache.update(ok=True, checked_at=now)
+        return True
+    try:
+        import psycopg  # noqa: PLC0415
+
+        async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
+            await conn.execute("SELECT 1")
+        _db_status_cache.update(ok=True, checked_at=now)
+        return True
+    except Exception:
+        _db_status_cache.update(ok=False, checked_at=now)
+        return False
+
+
+@app.middleware("http")
+async def _inject_db_status(request: Request, call_next: Any) -> Response:
+    request.state.db_ok = await _check_db()
+    return await call_next(request)
+
 SESSION_TTL = timedelta(hours=24)
 
 

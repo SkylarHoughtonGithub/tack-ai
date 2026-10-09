@@ -132,7 +132,11 @@ async def request_approval(tool_name: str, args: dict) -> bool:
         print(f"  {k}: {v}")
     print(f"{'─' * 50}")
     loop = asyncio.get_event_loop()
-    answer = await loop.run_in_executor(None, lambda: input("  Approve? [y/N]: "))
+    try:
+        answer = await loop.run_in_executor(None, lambda: input("  Approve? [y/N]: "))
+    except EOFError:
+        print("  → Denied (no stdin)\n")
+        return False
     approved = answer.strip().lower() == "y"
     print(f"  → {'Approved' if approved else 'Denied'}\n")
     return approved
