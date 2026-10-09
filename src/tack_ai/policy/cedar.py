@@ -29,7 +29,7 @@ _ACTION = {"type": "Action", "id": "call"}
 
 _KNOWN_TOOLS = [
     "web_search", "read_file", "search_documents",
-    "write_file", "run_code",
+    "write_file", "run_code", "run_tests",
     "draft_email", "send_email",
     "delete_file",
     "list_directory", "directory_tree", "search_files",
@@ -142,6 +142,7 @@ _TOOL_AUTH_CASES: list[tuple[str, dict, dict, PolicyDecision]] = [
     ("write_file", {"path": "src/config.py"}, {}, PolicyDecision.require_approval),
     ("write_file", {"path": "README.md"}, {}, PolicyDecision.require_approval),
     # Code
+    ("run_tests", {}, {}, PolicyDecision.allow),
     ("run_code", {"language": "python"}, {}, PolicyDecision.require_approval),
     # Email
     ("draft_email", {"to": "alice@example.com"}, {}, PolicyDecision.allow),
