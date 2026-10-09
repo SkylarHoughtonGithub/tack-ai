@@ -62,8 +62,10 @@ class PlanNode(BaseNode[CodingState, CodingDeps, CodingResult]):
             model=build_model(model_str, ctx.deps.settings),
             model_settings=make_run_settings(model_str),
             deps=ctx.deps,
+            message_history=ctx.state.history,
         )
         ctx.state.plan = result.output.steps
+        ctx.state.history.extend(result.new_messages())
         _debit_budget(ctx.state, result.usage, model_str)
 
         await append(
@@ -89,19 +91,23 @@ class EditNode(BaseNode[CodingState, CodingDeps, CodingResult]):
 
         mc = load_model_config()
         model_str = mc["tiers"]["general"]
+        history_snapshot = list(ctx.state.history)
 
-        async def _edit_one(step: EditPlanStep) -> EditResult:
+        async def _edit_one(step: EditPlanStep) -> tuple[EditResult, list]:
             r = await edit_agent.run(
                 f"File: {step.file_path}\nInstruction: {step.instruction}",
                 model=build_model(model_str, ctx.deps.settings),
                 model_settings=make_run_settings(model_str),
                 deps=ctx.deps,
+                message_history=history_snapshot,
             )
             _debit_budget(ctx.state, r.usage, model_str)
-            return r.output
+            return r.output, r.new_messages()
 
-        edits = await asyncio.gather(*[_edit_one(step) for step in ctx.state.plan])
-        ctx.state.edits = list(edits)
+        results = await asyncio.gather(*[_edit_one(step) for step in ctx.state.plan])
+        ctx.state.edits = [r[0] for r in results]
+        for _, msgs in results:
+            ctx.state.history.extend(msgs)
 
         await append(
             AuditRecord(
@@ -111,7 +117,7 @@ class EditNode(BaseNode[CodingState, CodingDeps, CodingResult]):
                 graph_node="edit",
                 tool_name="edit",
                 tool_args={"files": [s.file_path for s in ctx.state.plan]},
-                outcome=f"{len(edits)} file(s) edited",
+                outcome=f"{len(ctx.state.edits)} file(s) edited",
             )
         )
         return TestNode()
@@ -132,8 +138,10 @@ class TestNode(BaseNode[CodingState, CodingDeps, CodingResult]):
             model=build_model(model_str, ctx.deps.settings),
             model_settings=make_run_settings(model_str),
             deps=ctx.deps,
+            message_history=ctx.state.history,
         )
         ctx.state.test_result = result.output
+        ctx.state.history.extend(result.new_messages())
         _debit_budget(ctx.state, result.usage, model_str)
 
         await append(
@@ -225,6 +233,7 @@ class GateNode(BaseNode[CodingState, CodingDeps, CodingResult]):
             else:
                 raise
         ctx.state.gate_decision = decision
+        ctx.state.history.extend(result.new_messages())
         _debit_budget(ctx.state, result.usage, model_str)
 
         out_of_budget = ctx.state.budget_remaining_usd <= 0

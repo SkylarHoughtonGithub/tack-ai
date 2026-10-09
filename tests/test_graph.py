@@ -58,6 +58,7 @@ def _agent_result(output):
     result = MagicMock()
     result.output = output
     result.usage = MagicMock(input_tokens=10, output_tokens=5)
+    result.new_messages.return_value = []
     mock = AsyncMock(return_value=result)
     return mock
 

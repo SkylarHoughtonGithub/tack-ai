@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from pydantic_ai.messages import ModelMessage
+
     from tack_ai.core.config import Settings
 
 
@@ -73,6 +75,7 @@ class CodingState:
     gate_decision: GateDecision | None = None
     iteration: int = 0
     budget_remaining_usd: float = 0.0
+    history: list[ModelMessage] = field(default_factory=list)
 
 
 class CodingApprovalRequired(Exception):
