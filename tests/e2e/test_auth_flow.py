@@ -54,7 +54,7 @@ def test_audit_page_accessible_after_login(page: Page):
     page.fill("input[name='username']", USERNAME)
     page.fill("input[name='password']", PASSWORD)
     page.click("button[type='submit']")
-    page.click("#dd-history button")
+    page.click("#dd-compliance button")
     page.click("a[href='/audit'].dd-item")
     expect(page).to_have_url(f"{BASE_URL}/audit")
 
@@ -64,7 +64,7 @@ def test_approvals_page_accessible_after_login(page: Page):
     page.fill("input[name='username']", USERNAME)
     page.fill("input[name='password']", PASSWORD)
     page.click("button[type='submit']")
-    page.click("#dd-tasks button")
+    page.click("#dd-compliance button")
     page.click("a[href='/approvals'].dd-item")
     expect(page).to_have_url(f"{BASE_URL}/approvals")
     expect(page.locator("h1")).to_contain_text("Approvals")
