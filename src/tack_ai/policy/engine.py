@@ -35,6 +35,7 @@ def reload_policy_version() -> None:
     global _cached_version
     _cached_version = None
 
+
 # Tracks the most recent tool name per run_id for multi-step (confused-deputy) detection.
 _prior_tool: dict[str, str] = {}
 
@@ -47,7 +48,14 @@ async def get_policy_version() -> str:
         async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.post(
                 f"{_opa_url()}{_POLICY_PATH}",
-                json={"input": {"tool_name": "__version__", "args": {}, "user": "system", "context": {}}},
+                json={
+                    "input": {
+                        "tool_name": "__version__",
+                        "args": {},
+                        "user": "system",
+                        "context": {},
+                    }
+                },
             )
             resp.raise_for_status()
             result = resp.json().get("result", {})
@@ -62,7 +70,7 @@ async def policy_check(
     args: dict,
     user: str = "user",
     run_id: str | None = None,
-) -> PolicyDecision:
+) -> tuple[PolicyDecision, str]:
     """Evaluate policy for a tool call — routes to Cedar or OPA based on config.
 
     Cedar handles tool-authorization only; routing/budget calls (__route__)

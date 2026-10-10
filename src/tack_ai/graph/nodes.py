@@ -7,7 +7,7 @@ Flow: PlanNode → EditNode → TestNode → GateNode
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import genai_prices
 from pydantic_ai.models.fallback import FallbackModel
@@ -171,9 +171,7 @@ class GateNode(BaseNode[CodingState, CodingDeps, CodingResult]):
         # Jev is purpose-built for structured decisions — use it when the key is set.
         # Fall back to the simple LLM tier so the gate always works without a TypeSafe account.
         model_str = (
-            "typesafe:jev-latest"
-            if ctx.deps.settings.typesafe_api_key
-            else mc["tiers"]["simple"]
+            "typesafe:jev-latest" if ctx.deps.settings.typesafe_api_key else mc["tiers"]["simple"]
         )
 
         tr = ctx.state.test_result
@@ -213,12 +211,11 @@ class GateNode(BaseNode[CodingState, CodingDeps, CodingResult]):
                 output_type=_GateDecisionJev if use_jev else GateDecision,
                 deps=ctx.deps,
             )
-            raw = result.output
-            decision = (
-                GateDecision(action=raw.action, confidence=raw.confidence)
-                if use_jev
-                else raw
-            )
+            if use_jev:
+                raw = cast(_GateDecisionJev, result.output)
+                decision: GateDecision = GateDecision(action=raw.action, confidence=raw.confidence)
+            else:
+                decision = cast(GateDecision, result.output)
         except Exception as exc:
             if use_jev and getattr(exc, "status_code", None) in (401, 403):
                 # Bad/missing TypeSafe key — fall back to LLM tier entirely
@@ -229,7 +226,7 @@ class GateNode(BaseNode[CodingState, CodingDeps, CodingResult]):
                     model_settings=make_run_settings(llm_str),
                     deps=ctx.deps,
                 )
-                decision = result.output
+                decision = cast(GateDecision, result.output)
             else:
                 raise
         ctx.state.gate_decision = decision
@@ -250,9 +247,7 @@ class GateNode(BaseNode[CodingState, CodingDeps, CodingResult]):
                 outcome=f"{decision.action} (confidence={decision.confidence:.2f})",
                 decision_confidence=decision.confidence,
                 policy_decision=(
-                    PolicyDecision.require_approval
-                    if decision.action == "escalate"
-                    else None
+                    PolicyDecision.require_approval if decision.action == "escalate" else None
                 ),
             )
         )

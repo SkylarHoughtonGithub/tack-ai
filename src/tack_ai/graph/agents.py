@@ -69,9 +69,7 @@ async def write_file(ctx: RunContext[CodingDeps], path: str, content: str) -> st
     if s.database_url and s.openai_api_key:
         from tack_ai.memory.code_index import embed_file  # noqa: PLC0415
 
-        asyncio.create_task(
-            embed_file(str(target), content, s.database_url, s.get_key("openai"))
-        )
+        asyncio.create_task(embed_file(str(target), content, s.database_url, s.get_key("openai")))
     return f"Written {len(content)} bytes to {path}."
 
 

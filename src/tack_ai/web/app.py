@@ -93,7 +93,10 @@ async def _check_db() -> bool:
     import time  # noqa: PLC0415
 
     now = time.monotonic()
-    if _db_status_cache["checked_at"] is not None and now - _db_status_cache["checked_at"] < _DB_CACHE_TTL:
+    if (
+        _db_status_cache["checked_at"] is not None
+        and now - _db_status_cache["checked_at"] < _DB_CACHE_TTL
+    ):
         return _db_status_cache["ok"]
     if not settings.database_url:
         _db_status_cache.update(ok=True, checked_at=now)
@@ -114,6 +117,7 @@ async def _check_db() -> bool:
 async def _inject_db_status(request: Request, call_next: Any) -> Response:
     request.state.db_ok = await _check_db()
     return await call_next(request)
+
 
 SESSION_TTL = timedelta(hours=24)
 
@@ -1003,8 +1007,12 @@ try:
     # Pass already-constructed Model instances via build_model() so API keys come
     # from Settings. Deduplicate by string to avoid showing the same model twice.
     _seen_model_strs: set[str] = set()
-    _tier_models_built: dict[str, object] = {}
-    for _tier, _label in [("simple", "Simple"), ("general", "General"), ("deep_reasoning", "Deep reasoning")]:
+    _tier_models_built: dict[str, Any] = {}
+    for _tier, _label in [
+        ("simple", "Simple"),
+        ("general", "General"),
+        ("deep_reasoning", "Deep reasoning"),
+    ]:
         _model_str = _mc["tiers"][_tier]
         _provider = _model_str.split(":")[0]
         if getattr(settings, f"{_provider}_api_key", None) and _model_str not in _seen_model_strs:
