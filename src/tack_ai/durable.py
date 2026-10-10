@@ -73,7 +73,6 @@ def _init_dbos() -> None:
 
     # Import here so that importing durable.py at the top level never triggers
     # agent.py's module-level provider checks.
-    from tack_ai.agent import _CACHE_SETTINGS
     from tack_ai.agent import agent as _base_agent  # noqa: PLC0415
 
     # DBOS uses its own system tables in the same Postgres instance.
@@ -107,10 +106,7 @@ def _init_dbos() -> None:
         current_run_id.set(run_id)
         durable_mode.set(True)
         try:
-            result = await _durable_agent.run(
-                question,
-                model_settings=_CACHE_SETTINGS,
-            )
+            result = await _durable_agent.run(question)
         finally:
             durable_mode.set(False)
 

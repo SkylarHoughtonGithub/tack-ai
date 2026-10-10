@@ -1,4 +1,5 @@
 """Module for graph-related functionalities in the Tack AI system."""
+
 from tack_ai.graph.state import (
     CodingApprovalRequired,
     CodingDeps,

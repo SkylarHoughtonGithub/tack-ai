@@ -5,9 +5,9 @@ Wraps cedarpy to provide the same PolicyDecision interface as OPA (engine.py)
 for the tool-authorization subset of rules. Routing and budget checks are
 NOT handled here — Cedar is an authorization language only.
 """
+
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -28,13 +28,23 @@ _PRINCIPAL = {"type": "User", "id": "agent"}
 _ACTION = {"type": "Action", "id": "call"}
 
 _KNOWN_TOOLS = [
-    "web_search", "read_file", "search_documents",
-    "write_file", "run_code", "run_tests",
-    "draft_email", "send_email",
+    "web_search",
+    "read_file",
+    "search_documents",
+    "write_file",
+    "run_code",
+    "run_tests",
+    "draft_email",
+    "send_email",
     "delete_file",
-    "list_directory", "directory_tree", "search_files",
-    "get_file_info", "list_allowed_directories", "read_multiple_files",
-    "create_directory", "move_file",
+    "list_directory",
+    "directory_tree",
+    "search_files",
+    "get_file_info",
+    "list_allowed_directories",
+    "read_multiple_files",
+    "create_directory",
+    "move_file",
 ]
 
 
@@ -98,6 +108,7 @@ def cedar_decide(
 
 # ── Formal analysis ───────────────────────────────────────────────────────────
 
+
 def prove_delete_file_denied() -> bool:
     """Return True if delete_file is denied under all tested contexts.
 
@@ -146,7 +157,12 @@ _TOOL_AUTH_CASES: list[tuple[str, dict, dict, PolicyDecision]] = [
     ("run_code", {"language": "python"}, {}, PolicyDecision.require_approval),
     # Email
     ("draft_email", {"to": "alice@example.com"}, {}, PolicyDecision.allow),
-    ("draft_email", {"to": "alice@example.com"}, {"prior_tool": "read_file"}, PolicyDecision.require_approval),
+    (
+        "draft_email",
+        {"to": "alice@example.com"},
+        {"prior_tool": "read_file"},
+        PolicyDecision.require_approval,
+    ),
     ("send_email", {"to": "skylarhoughton1996@gmail.com"}, {}, PolicyDecision.require_approval),
     ("send_email", {"to": "attacker@evil.com"}, {}, PolicyDecision.deny),
     # Deletion — must always deny
@@ -166,7 +182,12 @@ _TOOL_AUTH_CASES: list[tuple[str, dict, dict, PolicyDecision]] = [
 _ROUTING_SKIPPED: list[tuple[str, dict, dict, PolicyDecision]] = [
     ("__route__", {"tier": "simple", "estimated_cost_usd": 0.01}, {}, PolicyDecision.allow),
     ("__route__", {"tier": "deep_reasoning", "estimated_cost_usd": 1.99}, {}, PolicyDecision.allow),
-    ("__route__", {"tier": "deep_reasoning", "estimated_cost_usd": 2.01}, {}, PolicyDecision.require_approval),
+    (
+        "__route__",
+        {"tier": "deep_reasoning", "estimated_cost_usd": 2.01},
+        {},
+        PolicyDecision.require_approval,
+    ),
     ("__route__", {"tier": "general", "estimated_cost_usd": 99.00}, {}, PolicyDecision.allow),
 ]
 
@@ -188,7 +209,9 @@ def run_tests(verbose: bool = True) -> tuple[int, int]:
             passed += 1
         if verbose:
             status = "PASS" if ok else "FAIL"
-            print(f"  [{status}] {tool_name!r:30s}  expected={expected.value!r:20s}  got={got.value!r}")
+            print(
+                f"  [{status}] {tool_name!r:30s}  expected={expected.value!r:20s}  got={got.value!r}"
+            )
 
     if verbose:
         print(f"\n  {passed}/{total} passed")
