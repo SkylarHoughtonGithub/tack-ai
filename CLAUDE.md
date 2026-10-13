@@ -66,3 +66,12 @@ subprocess layer that can swallow Ctrl+C.
 - Architecture docs: `docs/decisions/ARCHITECTURE.md` component map + data flow; ADRs in `docs/decisions/`
 - Agent tool inventory: `docs/AGENTS.md` — all tools, policies, approval requirements
 - OIDC / SSO: `web/oidc.py` — Google, GitHub, or generic OIDC via Authlib; role mapping from claims
+
+## Skylab integration
+
+tack-ai is the governed remediation agent for the Skylab platform. See `plan-skylab-integration.md` for the integration work: PR-only output, Cedar/OPA policy context, Backstage MCP as a tool, OTel export to Alloy. The chart that deploys it lives in `skylab-gitops` wave 7.
+
+## Workflow
+
+- `main` is protected: branch and open a PR (self-merge, 0 approvals). Active development on `enhance`.
+- No `Co-Authored-By` trailers in commit messages.
