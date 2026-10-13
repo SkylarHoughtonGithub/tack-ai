@@ -16,6 +16,21 @@ HolmesGPT investigates and tack-ai writes the fix as a pull request; neither tou
 
 tack-ai's chart lands in **skylab-gitops wave 7** under `charts/ai/`. This file lists the work needed on tack-ai itself.
 
+## Status (as of 2026-10-13)
+
+Progress through the shared Skylab build order:
+
+- [x] 1. **skylab-gitops** — bootstrap, skylab-apps renderer, CI pipeline, waves -2 → 0 landed. Next: wave 1 (Crossplane + providers).
+- [ ] 2. **skylab-terraform** — not started.
+- [ ] 3. **skylab-backstage** — not started.
+- [ ] 4. **skylab-crossplane** — not started.
+- [ ] 5. Archive the old repos
+- [ ] 6. Golden paths
+- [ ] 7. **AI layer** (includes tack-ai) — not started. Waiting on waves 1–6.
+- [ ] 8. Portfolio finish
+
+tack-ai integration work (below) starts in wave 7.
+
 ## Integration work
 
 - **Output is a PR, not an action.** Fixes land as PRs to Gitea `platform/tenants` (or skylab-gitops for platform issues) through tack-ai's connector, so Argo CD applies every change and Git holds the history.
