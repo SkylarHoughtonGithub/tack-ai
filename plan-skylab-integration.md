@@ -20,8 +20,8 @@ tack-ai's chart lands in **skylab-gitops wave 7** under `charts/ai/`. This file 
 
 Progress through the shared Skylab build order:
 
-- [x] 1. **skylab-gitops** — bootstrap, skylab-apps renderer, CI pipeline, waves -2 → 0 landed. Next: wave 1 (Crossplane + providers).
-- [ ] 2. **skylab-terraform** — not started.
+- [x] 1. **skylab-gitops** — bootstrap, skylab-apps renderer, CI pipeline, waves -2 → 1 landed. Next: close deferred wave-0 wiring, then wave 2 or wave 3.
+- [x] 2. **skylab-terraform** — substantively complete. Seven stacks and five modules with fmt/validate/tflint/trivy CI, consistent cloud-prefix naming.
 - [ ] 3. **skylab-backstage** — not started.
 - [ ] 4. **skylab-crossplane** — not started.
 - [ ] 5. Archive the old repos
